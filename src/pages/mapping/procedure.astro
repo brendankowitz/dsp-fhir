@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Procedure order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="An order for a procedure is a ServiceRequest; the performed procedure itself is a separate Procedure resource created later. DSP's order_data fields map onto both sides."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -26,7 +30,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -83,4 +89,12 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspProcedureOrder → ServiceRequest(category=procedure)</code>. The downstream performed <code class="inline">Procedure</code> resource is created by a separate map.</p>
+<pre><code>{FML.procedure}</code></pre>
+  </Fragment>
+  </Tabs>
 </Layout>

@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Device order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP device orders cover DME (walker, CPAP, glucose monitor). FHIR's DeviceRequest is the order resource; Device is the physical/logical artifact; DeviceUseStatement (R4) records active use. R5 replaces DeviceUseStatement with DeviceUsage — we note the xver path."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -26,7 +30,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -74,6 +80,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspDeviceOrder → DeviceRequest</code>. Downstream <code class="inline">DeviceUseStatement</code> (R4) / <code class="inline">DeviceUsage</code> (R5) is out of scope for this map.</p>
+<pre><code>{FML.device}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout warn">
     <strong>R5 crosswalk.</strong> If the server needs to report ongoing use, R4's

@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Follow-up order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP follow-up orders are a provider-intent artifact (“see me in 2 weeks”) rather than a booked appointment. Model as a ServiceRequest with an occurrence timing; a later Appointment realizes it if scheduled."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -23,7 +27,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -69,6 +75,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspFollowUpOrder → ServiceRequest(category=follow-up)</code> with the <code class="inline">return-in</code> <code class="inline">Duration</code> + approximation-flag pattern.</p>
+<pre><code>{FML['follow-up']}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout warn">
     Follow-up is the weakest-fit DSP order type in R4. FHIR has no "return visit request" primitive;

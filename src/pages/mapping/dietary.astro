@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Dietary order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP dietary orders capture diet type, texture, fluid restrictions, supplements, and feeding routes. FHIR has a purpose-built resource — NutritionOrder — that maps almost one-to-one. Unlike the other DSP orders (which are all ServiceRequest flavours), dietary gets its own resource."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -29,7 +33,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -88,6 +94,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspDietaryOrder → NutritionOrder</code>. The cleanest one-to-one shape of any DSP order type.</p>
+<pre><code>{FML.dietary}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout ok">
     <strong>Best-fit DSP order.</strong> <code class="inline">NutritionOrder</code> is a

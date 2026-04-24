@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Referral order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="In R4, the standalone ReferralRequest from DSTU2 was merged into ServiceRequest. A referral is a ServiceRequest with a referral category and a target Practitioner / specialty."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -25,7 +29,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="callout warn">
     DSP 1.0's public documentation does not yet include a dedicated referral order schema page
@@ -73,4 +79,12 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspReferralOrder → ServiceRequest(category=referral)</code>. DSP 1.0 has not yet published the canonical referral shape, so this map covers the inferred fields.</p>
+<pre><code>{FML.referral}</code></pre>
+  </Fragment>
+  </Tabs>
 </Layout>

@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Laboratory order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP lab orders map onto ServiceRequest with category=laboratory. The lab concept is a LOINC-coded CodeableConcept in ServiceRequest.code, and sample_type becomes a Specimen resource."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -28,7 +32,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -85,4 +91,12 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspLabOrder → ServiceRequest(category=laboratory)</code>. The companion <code class="inline">Specimen</code> is created by a sibling group not shown here.</p>
+<pre><code>{FML.lab}</code></pre>
+  </Fragment>
+  </Tabs>
 </Layout>

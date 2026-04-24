@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Document section" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="Each DSP document_section becomes a section of a FHIR Composition. The Composition is the root of the clinical note; sections carry LOINC-coded titles, narrative content, and entry references to structured resources."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -26,7 +30,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -84,6 +90,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for a single <code class="inline">DspDocumentSection → Composition.section</code>. In practice this map is invoked from a parent group that creates the <code class="inline">Composition</code> and iterates sections.</p>
+<pre><code>{FML['document-section']}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <h2>Section-type catalog (DSP "Overview" and friends)</h2>
   <p>

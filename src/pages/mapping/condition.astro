@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Condition" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP condition resources map almost directly onto FHIR Condition. The fit is near-perfect; the only extensions needed are DSP-specific metadata (spoken forms, transcript turn provenance, confidence)."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -37,7 +41,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -88,4 +94,12 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Executable FHIR Mapping Language skeleton for <code class="inline">DspCondition → Condition</code>. The full map ships in the <a href="/dsp-fhir/ig">downloadable IG package</a> and can be executed via <code class="inline">StructureMap/$transform</code> on a capable FHIR server.</p>
+<pre><code>{FML.condition}</code></pre>
+  </Fragment>
+  </Tabs>
 </Layout>

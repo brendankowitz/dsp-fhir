@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Study order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP study orders are semantically ambiguous — they can mean 'order a diagnostic study' (cardiology, sleep, EEG) or 'enroll the patient in a research study'. The IG routes by DSP intent + order_data shape. Diagnostic studies are ServiceRequest; research enrollments are ResearchSubject."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Routing rule</h2>
   <div class="card">
     <table>
@@ -37,7 +41,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example (diagnostic study)</h2>
   <div class="grid cols-2">
     <div>
@@ -114,6 +120,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Routing-split map — the FML below covers the diagnostic-study branch. The research-enrollment branch is sketched as a comment.</p>
+<pre><code>{FML.study}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout warn">
     <strong>Disambiguation.</strong> DSP 1.0 does not (as of the spec revision the IG

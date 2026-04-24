@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Activity order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP activity orders cover ambulation, mobility, exercise, activity restrictions (weight-bearing limits, no driving). These are plan-like items more than one-shot procedures. Prefer CarePlan.activity — a ServiceRequest is acceptable when the activity is literally a single scheduled event."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Routing rule</h2>
   <div class="card">
     <table>
@@ -37,7 +41,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example</h2>
   <div class="grid cols-2">
     <div>
@@ -106,6 +112,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Skeleton for <code class="inline">DspActivityOrder → CarePlan.activity[]</code>. Per-activity confidence isn't expressible on <code class="inline">activity.detail</code>; callers needing it should emit standalone <code class="inline">ServiceRequest</code>s and link via <code class="inline">activity.reference</code> (see callout below).</p>
+<pre><code>{FML.activity}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout warn">
     <strong>The one DSP type that collapses onto FHIR awkwardly.</strong>

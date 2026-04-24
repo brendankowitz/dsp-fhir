@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Medication order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP medication orders land on MedicationRequest. DSP's free-text dosing narrative fits R5's renderedDosage better than R4's dosageInstruction.text — a good candidate for a cross-version extension."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -36,7 +40,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Example</h2>
   <div class="grid cols-2">
     <div>
@@ -86,6 +92,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Executable FHIR Mapping Language skeleton for <code class="inline">DspMedicationOrder → MedicationRequest</code>. The full map ships in the <a href="/dsp-fhir/ig">downloadable IG package</a>.</p>
+<pre><code>{FML.medication}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout">
     <strong>R5 xver benefit:</strong> <code class="inline">MedicationRequest.renderedDosageInstruction</code>

@@ -1,6 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
+import Tabs from '../../components/Tabs.astro';
+import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Immunization order" active="mapping">
   <MapHeader
@@ -10,6 +12,8 @@ import MapHeader from '../../components/MapHeader.astro';
     summary="DSP immunization orders split cleanly on intent. A proposed vaccine (“give flu shot at next visit”) lands as ImmunizationRecommendation; an administered dose (“gave flu shot today”) lands as Immunization. Both carry CVX codes. Unlike the generic ServiceRequest pattern, FHIR has two purpose-built resources here — pick by DSP intent."
   />
 
+  <Tabs>
+  <Fragment slot="summary">
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
@@ -29,7 +33,9 @@ import MapHeader from '../../components/MapHeader.astro';
       </tbody>
     </table>
   </div>
+  </Fragment>
 
+  <Fragment slot="example">
   <h2>Side-by-side example (proposal — ImmunizationRecommendation)</h2>
   <div class="grid cols-2">
     <div>
@@ -112,6 +118,14 @@ import MapHeader from '../../components/MapHeader.astro';
 }`}</code></pre>
     </div>
   </div>
+  </Fragment>
+
+  <Fragment slot="fml">
+  <h2>FML mapping</h2>
+  <p>Routing-split map — the FML below covers the "administered" branch. The recommendation branch is sketched as a comment; see the downloadable IG package for the pre-split convention.</p>
+<pre><code>{FML.immunization}</code></pre>
+  </Fragment>
+  </Tabs>
 
   <div class="callout warn">
     <strong>Disambiguation rule.</strong> DSP's single <code class="inline">IMMUNIZATION_ORDER</code>
