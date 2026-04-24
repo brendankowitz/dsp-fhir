@@ -1,0 +1,283 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Interop & layering — DSP-FHIR" active="interop">
+  <section class="hero">
+    <h1>Interop &amp; layering</h1>
+    <p class="sub">
+      DSP-FHIR is the <strong>write-side</strong>: ambient conversation → DSP payload →
+      FHIR R4 artefacts. A <strong>downstream canonical patient-context store</strong>
+      is the read-side: FHIR → copilot runtime / EHR of record. This page is the
+      contract that keeps the two layers clean — identifiers, references, extensions,
+      profile base, provenance, and the namespaces DSP-FHIR reserves so a downstream
+      model can compose on top without collision.
+    </p>
+  </section>
+
+  <h2 id="intro">Where DSP-FHIR sits in the stack</h2>
+  <div class="card">
+    <p>
+      DSP-FHIR resources are <strong>complete-on-their-own R4 artefacts</strong>. They
+      do not depend on any particular downstream model, and they compose cleanly into
+      any canonical patient-context store that consumes standard FHIR.
+    </p>
+    <ol class="clean">
+      <li><strong>Ambient capture</strong> — microphone, speaker turns, transcript.</li>
+      <li><strong>DSP payload</strong> — Dragon Standard Payload 1.0 JSON envelope.</li>
+      <li><strong>DSP-FHIR Bundle</strong> — R4 <code class="inline">Bundle</code> of <code class="inline">Encounter</code>, <code class="inline">Composition</code>, orders, <code class="inline">DocumentReference</code>s, <code class="inline">Provenance</code>.</li>
+      <li><strong>Downstream canonical patient-context store</strong> — dedupes, reconciles, joins with the longitudinal record.</li>
+      <li><strong>EHR of record</strong> — persistent clinical system.</li>
+    </ol>
+    <p style="margin-bottom:0">
+      Each boundary in that chain is a standard FHIR exchange. DSP-FHIR's job is to
+      emit resources that the next hop can ingest without custom glue — and to not
+      quietly occupy namespaces a downstream layer will later need.
+    </p>
+  </div>
+
+  <h2 id="identifiers">Identifier guidance</h2>
+  <div class="card">
+    <p>
+      Every DSP-emitted resource <strong>SHOULD</strong> carry a stable
+      <code class="inline">identifier</code> so a downstream store can dedupe across
+      replays, re-posts, and version bumps. DSP-FHIR reserves an identifier system
+      family under <code class="inline">https://dsp-fhir.org/identifier/...</code>.
+    </p>
+    <table>
+      <thead><tr><th>System URI</th><th>Carries</th><th>Appears on</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code class="inline">https://dsp-fhir.org/identifier/session</code></td>
+          <td>DSP <code class="inline">session_id</code></td>
+          <td><code class="inline">Provenance</code>, session-scoped resources</td>
+        </tr>
+        <tr>
+          <td><code class="inline">https://dsp-fhir.org/identifier/payload</code></td>
+          <td>DSP payload GUID (one per envelope)</td>
+          <td><code class="inline">Bundle.identifier</code></td>
+        </tr>
+        <tr>
+          <td><code class="inline">https://dsp-fhir.org/identifier/source-ref</code></td>
+          <td>Optional passthrough of an upstream source-of-truth identifier</td>
+          <td>Any resource that has an upstream pedigree</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      <strong>Patient identifiers</strong> supplied by upstream DSP inputs
+      (MRN, tenant-specific IDs, visit numbers) <strong>SHOULD</strong> be preserved
+      verbatim on <code class="inline">Patient.identifier</code> with their original
+      <code class="inline">system</code> and <code class="inline">type</code>. The
+      downstream canonical store owns the mapping to its internal MRN / tenant
+      identifier space; DSP-FHIR does not invent or normalise those.
+    </p>
+    <p><strong>Passthrough Patient identifier:</strong></p>
+<pre><code>{`{
+  "resourceType": "Patient",
+  "id": "pat-67890",
+  "identifier": [
+    {
+      "use": "usual",
+      "type": {
+        "coding": [{
+          "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+          "code": "MR", "display": "Medical record number"
+        }]
+      },
+      "system": "urn:ehr:mrn:example-health",
+      "value": "MRN-67890"
+    },
+    {
+      "use": "secondary",
+      "system": "https://dsp-fhir.org/identifier/source-ref",
+      "value": "dsp-upstream-ref-9f3e"
+    }
+  ]
+}`}</code></pre>
+  </div>
+
+  <h2 id="references">Reference style</h2>
+  <div class="card">
+    <p>
+      Inside a DSP-FHIR <code class="inline">Bundle</code> we reference resources by
+      <code class="inline">urn:uuid:*</code> so the Bundle is self-contained and
+      order-independent. When the Bundle is POSTed to a FHIR server, the server
+      rewrites those to relative or absolute references.
+    </p>
+    <table>
+      <thead><tr><th>Style</th><th>Example</th><th>When</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code class="inline">urn:uuid:*</code></td>
+          <td><code class="inline">urn:uuid:5b9c...e3</code></td>
+          <td>Inside a DSP-FHIR Bundle before server ingest. Matches <code class="inline">Bundle.entry.fullUrl</code>.</td>
+        </tr>
+        <tr>
+          <td>Relative</td>
+          <td><code class="inline">Patient/pat-67890</code></td>
+          <td>After server ingest, within the same FHIR base.</td>
+        </tr>
+        <tr>
+          <td>Absolute</td>
+          <td><code class="inline">https://fhir.example.org/Patient/pat-67890</code></td>
+          <td>Cross-server reference from the downstream store to the write server.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-bottom:0">
+      A downstream canonical store <strong>SHOULD</strong> accept all three and
+      normalise internally. It <strong>MUST NOT</strong> assume a DSP-FHIR Bundle
+      has already been posted to its own FHIR base.
+    </p>
+  </div>
+
+  <h2 id="extensions">Extension namespace</h2>
+  <div class="card">
+    <p>
+      DSP-FHIR reserves <code class="inline">https://dsp-fhir.org/StructureDefinition/*</code>
+      for profiles and extensions. A downstream canonical patient-context model
+      <strong>SHOULD NOT</strong> mint extensions under this namespace; it should
+      carry its own canonical and either pass DSP extensions through verbatim or map
+      them into its own shape.
+    </p>
+    <table>
+      <thead><tr><th>Extension</th><th>Value type</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">payload-version</code></td><td>complex (major/minor/revision/quality)</td><td>DSP payload version carried on <code class="inline">Bundle.meta</code> and <code class="inline">Encounter</code>. Also denormalised to <code class="inline">meta.tag</code>.</td></tr>
+        <tr><td><code class="inline">external-callback-url</code></td><td><code class="inline">valueUrl</code></td><td>DSP callback endpoint on <code class="inline">Encounter</code>.</td></tr>
+        <tr><td><code class="inline">update-status</code></td><td><code class="inline">valueCode</code></td><td>Optional DSP <code class="inline">NEW/UPDATED/DELETED</code>; prefer <code class="inline">Provenance</code>.</td></tr>
+        <tr><td><code class="inline">confidence-score</code></td><td><code class="inline">valueDecimal</code> (0–1)</td><td>ASR / extraction confidence on orders (and any clinical assertion).</td></tr>
+        <tr><td><code class="inline">transcript-turn-refs</code></td><td>complex (repeating <code class="inline">turn</code> <code class="inline">valueInteger</code>)</td><td>Grounding — turn indices in the referenced transcript.</td></tr>
+        <tr><td><code class="inline">spoken-forms</code></td><td>complex (repeating <code class="inline">form</code> <code class="inline">valueString</code>)</td><td>Voice aliases for conditions, sections, orders.</td></tr>
+        <tr><td><code class="inline">search-terms</code></td><td>complex (repeating <code class="inline">valueString</code>)</td><td>Synonyms / search surface for an assertion.</td></tr>
+        <tr><td><code class="inline">speaker-count</code></td><td><code class="inline">valuePositiveInt</code></td><td>Number of distinct speakers on a transcript <code class="inline">DocumentReference</code>.</td></tr>
+        <tr><td><code class="inline">recording-locale</code></td><td><code class="inline">valueCode</code> (BCP-47)</td><td>Locale of the recording / transcript.</td></tr>
+        <tr><td><code class="inline">dsp-timezone</code></td><td><code class="inline">valueString</code></td><td>IANA timezone of the session.</td></tr>
+        <tr><td><code class="inline">dsp-tenant-organization</code></td><td><code class="inline">valueReference(Organization)</code></td><td>DSP tenant org (distinct from <code class="inline">Encounter.serviceProvider</code>).</td></tr>
+        <tr><td><code class="inline">legacy-id</code></td><td><code class="inline">valueString</code></td><td>DSP <code class="inline">legacy_id</code> on <code class="inline">Composition.section</code>.</td></tr>
+        <tr><td><code class="inline">rendered-dosage-instruction</code></td><td><code class="inline">valueString</code></td><td>R5 back-port on <code class="inline">MedicationRequest</code>.</td></tr>
+        <tr><td><code class="inline">abbreviation</code></td><td><code class="inline">valueString</code></td><td>Order abbreviation (e.g. "CBC", "CMP") on lab <code class="inline">ServiceRequest</code>.</td></tr>
+        <tr><td><code class="inline">bodysite-laterality</code></td><td><code class="inline">valueCode</code></td><td>Laterality on <code class="inline">ServiceRequest.bodySite</code>.</td></tr>
+        <tr><td><code class="inline">imaging-modality</code></td><td><code class="inline">valueCoding</code> (DCM)</td><td>Imaging modality on <code class="inline">ServiceRequest</code>.</td></tr>
+        <tr><td><code class="inline">imaging-views</code></td><td><code class="inline">valueString</code></td><td>View count / description on imaging order.</td></tr>
+        <tr><td><code class="inline">imaging-contrast</code></td><td><code class="inline">valueCode</code></td><td>With / without / with-and-without.</td></tr>
+        <tr><td><code class="inline">procedure-devices</code></td><td>complex (repeating <code class="inline">device</code> <code class="inline">valueString</code>)</td><td>Devices mentioned on a procedure order.</td></tr>
+        <tr><td><code class="inline">return-in</code></td><td><code class="inline">valueDuration</code></td><td>Follow-up window (alt to <code class="inline">occurrenceTiming.boundsDuration</code>).</td></tr>
+        <tr><td><code class="inline">approximation</code></td><td><code class="inline">valueBoolean</code></td><td>Marks a Duration as approximate ("in about 2 weeks").</td></tr>
+        <tr><td><code class="inline">prn</code></td><td><code class="inline">valueBoolean</code></td><td>PRN flag on follow-up <code class="inline">ServiceRequest</code>.</td></tr>
+        <tr><td><code class="inline">weight-limit</code></td><td>complex (Quantity)</td><td>Weight-bearing / lifting limit on activity restrictions.</td></tr>
+        <tr><td><code class="inline">linkage-confidence</code></td><td><code class="inline">valueDecimal</code></td><td>Cross-resource linkage confidence (e.g. order↔condition).</td></tr>
+        <tr><td><code class="inline">approximate-match</code></td><td><code class="inline">valueBoolean</code></td><td>Marks a resolved match (e.g. accompanying person) as approximate.</td></tr>
+        <tr><td><code class="inline">dsp-payload-versions</code></td><td>complex</td><td>Advertised on <code class="inline">CapabilityStatement.rest.resource</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="profile-base">Profile base</h2>
+  <div class="card">
+    <p>
+      DSP-FHIR profiles derive from <strong>base FHIR R4</strong>, not US Core, IPA,
+      or any other jurisdictional family. The rationale is layering: downstream
+      consumers routinely need to stack US Core, IPA, or a national profile on top,
+      and a formal inheritance chain through a jurisdictional profile would force
+      double-constraint work and collide with regional variants.
+    </p>
+    <p style="margin-bottom:0">
+      In practice DSP-FHIR remains <em>compatible</em> with US Core on the vast
+      majority of elements (names, identifiers, codings, must-supports), but does not
+      formally inherit from it. Jurisdictional layering is the downstream store's
+      concern.
+    </p>
+  </div>
+
+  <h2 id="provenance">Self-tagging provenance</h2>
+  <div class="card">
+    <p>
+      Every DSP-originated resource carries <code class="inline">meta.source = "dsp://..."</code>
+      and is referenced by a <code class="inline">Provenance</code> resource tied to
+      the session. Together with the cross-cutting extensions
+      (<code class="inline">confidence-score</code>, <code class="inline">transcript-turn-refs</code>,
+      <code class="inline">spoken-forms</code>, <code class="inline">search-terms</code>),
+      this is the downstream audit surface: any assertion can be filtered by
+      confidence, re-verified against its originating transcript turn, or routed for
+      human review without the downstream model inventing its own audit shape.
+    </p>
+    <p style="margin-bottom:0">
+      <code class="inline">payload-version</code> rides as a <code class="inline">meta.tag</code>
+      (as well as a structured extension) so downstream stores can filter by DSP
+      release — <code class="inline">GET [base]/Encounter?_tag=https://dsp-fhir.org/CodeSystem/payload-version|1.0.0</code>
+      — and evolve in step with DSP.
+    </p>
+  </div>
+
+  <h2 id="media-binary">Recording payload — <code class="inline">Media</code> + optional <code class="inline">Binary</code></h2>
+  <div class="card">
+    <p>
+      DSP-FHIR references audio recordings via <code class="inline">Media.content.url</code>,
+      typically an external blob URL governed by the write side. A downstream server
+      <strong>MAY</strong> inline or re-host the payload as a <code class="inline">Binary</code>
+      resource referenced by the same <code class="inline">Media</code>. Both
+      patterns are conformant; the choice is an operational one about custody and
+      retention.
+    </p>
+    <ul class="clean" style="margin-bottom:0">
+      <li><strong>External URL:</strong> <code class="inline">Media.content.url = "https://blob.example.org/rec/abc.wav"</code></li>
+      <li><strong>Re-hosted:</strong> <code class="inline">Media.content.url = "Binary/bin-001"</code> (or an absolute reference to the downstream server).</li>
+    </ul>
+  </div>
+
+  <h2 id="out-of-scope">Out of scope for DSP-FHIR 1.0</h2>
+  <div class="card">
+    <p>
+      The following resources are intentionally <strong>not emitted</strong> by
+      DSP-FHIR 1.0. They are the downstream store's responsibility, either because
+      they are reconciliation-shaped (not capture-shaped) or because they represent
+      state that lives in the EHR of record.
+    </p>
+    <table>
+      <thead><tr><th>Resource</th><th>Why out of scope</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">Observation</code></td><td>Vitals and discrete results are not dictated by DSP 1.0; they belong in the downstream EHR / context store.</td></tr>
+        <tr><td><code class="inline">DiagnosticReport</code></td><td>Lab / imaging / pathology report finalisation is downstream. DSP emits the order (<code class="inline">ServiceRequest</code>), not the report.</td></tr>
+        <tr><td><code class="inline">AllergyIntolerance</code></td><td>Allergy reconciliation is a downstream concern. Transcript-mentioned allergies ride as narrative in the <code class="inline">Composition</code> section and are surfaced for downstream reconciliation.</td></tr>
+        <tr><td><code class="inline">MedicationStatement</code></td><td>DSP emits <code class="inline">MedicationRequest</code> (prescribing intent). "Patient reports taking X" without prescribing intent is out of scope for 1.0.</td></tr>
+        <tr><td><code class="inline">RelatedPerson</code></td><td>Caregivers mentioned in dictation are narrative-only in 1.0; resolution to a typed resource is a downstream <code class="inline">$match</code> concern.</td></tr>
+        <tr><td><code class="inline">Coverage</code></td><td>Insurance details are out of scope.</td></tr>
+        <tr><td><code class="inline">Schedule</code>, <code class="inline">Task</code></td><td>Workflow state is a downstream concern; DSP emits the clinical intent, not the workflow tracking.</td></tr>
+        <tr><td><code class="inline">Basic</code></td><td>DSP uses typed extensions on the appropriate resource; it never falls back to <code class="inline">Basic</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="namespace-registry">Namespace registry</h2>
+  <div class="card">
+    <p>
+      The complete set of canonical URI namespaces DSP-FHIR owns. A downstream
+      canonical patient-context model <strong>MUST NOT</strong> mint artefacts under
+      these paths.
+    </p>
+    <table>
+      <thead><tr><th>Namespace</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">https://dsp-fhir.org/StructureDefinition/*</code></td><td>DSP extensions and profiles.</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/CodeSystem/*</code></td><td>DSP code systems (<a href="/dsp-fhir/terminology">terminology appendix</a>).</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/ValueSet/*</code></td><td>DSP value sets.</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/ConceptMap/*</code></td><td>DSP concept maps.</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/StructureMap/*</code></td><td>FML maps (DSP → FHIR transforms).</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/SearchParameter/*</code></td><td>DSP search parameters (<a href="/dsp-fhir/operations#search-params">operations</a>).</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/OperationDefinition/*</code></td><td>DSP operations (currently just <code class="inline">$ground</code>, and an IG-profiled <code class="inline">RelatedPerson/$match</code>).</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/ActivityDefinition/*</code></td><td>DSP-published <code class="inline">$apply</code> templates (e.g. <code class="inline">dsp-follow-up-appointment</code>).</td></tr>
+        <tr><td><code class="inline">https://dsp-fhir.org/identifier/*</code></td><td>DSP identifier systems (see <a href="#identifiers">#identifiers</a>).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    The <code class="inline">https://dsp-fhir.org</code> base is illustrative. A real
+    publication would mint these under an HL7-managed or vendor-owned canonical that
+    commits to long-term resolution — but the <em>shape</em> of the reservation
+    (one namespace per artefact kind, identifier systems separated from
+    <code class="inline">StructureDefinition</code>) is the part a downstream model
+    needs to respect.
+  </div>
+</Layout>

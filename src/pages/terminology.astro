@@ -126,6 +126,120 @@ import Layout from '../layouts/Layout.astro';
     </table>
   </div>
 
+  <section class="card" id="standard-codesystems">
+    <h2>Standard CodeSystems used</h2>
+    <p>
+      Every non-DSP CodeSystem that DSP-FHIR emits or binds against. Downstream canonical stores
+      layering under any R4 repository can expect codings from these systems on the resources
+      DSP-FHIR publishes; terminology servers should be provisioned to resolve all of them.
+    </p>
+    <table>
+      <thead><tr><th scope="col">Purpose</th><th scope="col">System URI</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Clinical findings, problems, body sites, categories, routes</td><td><code class="inline">http://snomed.info/sct</code></td><td>Condition codes, procedure codes, many clinical codings. Dual-coded with ICD-10-CM where applicable.</td></tr>
+        <tr><td>US diagnosis coding</td><td><code class="inline">http://hl7.org/fhir/sid/icd-10-cm</code></td><td>Condition codes (US). Companion to SNOMED on <code class="inline">Condition.code</code>.</td></tr>
+        <tr><td>Lab, document, and section codes</td><td><code class="inline">http://loinc.org</code></td><td>Observation / lab / document codes, <code class="inline">Composition.type</code> and <code class="inline">section.code</code>, transcript type.</td></tr>
+        <tr><td>Medications</td><td><code class="inline">http://www.nlm.nih.gov/research/umls/rxnorm</code></td><td>Medication codes on <code class="inline">MedicationRequest.medicationCodeableConcept</code>.</td></tr>
+        <tr><td>Procedure codes (US)</td><td><code class="inline">http://www.ama-assn.org/go/cpt</code></td><td>CPT procedure coding; paired with SNOMED procedures where applicable.</td></tr>
+        <tr><td>Vaccine codes</td><td><code class="inline">http://hl7.org/fhir/sid/cvx</code></td><td>CVX codes on <code class="inline">Immunization.vaccineCode</code> (preferred over SNOMED where available).</td></tr>
+        <tr><td>Quantity units (UCUM)</td><td><code class="inline">http://unitsofmeasure.org</code></td><td>Dose, duration, and all other <code class="inline">Quantity.system</code> uses.</td></tr>
+        <tr><td>Practitioner identifier</td><td><code class="inline">http://hl7.org/fhir/sid/us-npi</code></td><td>NPI on <code class="inline">Practitioner.identifier.system</code>.</td></tr>
+        <tr><td>Imaging modality</td><td><code class="inline">http://dicom.nema.org/resources/ontology/DCM</code></td><td>DICOM modality codes on the <code class="inline">imaging-modality</code> extension.</td></tr>
+        <tr><td><code class="inline">Condition.clinicalStatus</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/condition-clinical</code></td><td>active / recurrence / relapse / inactive / remission / resolved.</td></tr>
+        <tr><td><code class="inline">Condition.verificationStatus</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/condition-ver-status</code></td><td>confirmed / unconfirmed / differential / refuted / entered-in-error / provisional.</td></tr>
+        <tr><td><code class="inline">Condition.category</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/condition-category</code></td><td><code class="inline">encounter-diagnosis</code>, <code class="inline">problem-list-item</code>.</td></tr>
+        <tr><td><code class="inline">Observation.category</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/observation-category</code></td><td>Noted for completeness; DSP-FHIR 1.0 does not emit <code class="inline">Observation</code>, but downstream stores materialising vitals/labs SHOULD use this system.</td></tr>
+        <tr><td><code class="inline">Encounter.class</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-ActCode</code></td><td>AMB, IMP, EMER, …</td></tr>
+        <tr><td><code class="inline">Encounter.priority</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-ActPriority</code></td><td>Used by the encounter view definition.</td></tr>
+        <tr><td><code class="inline">Encounter.participant.type</code></td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-ParticipationType</code></td><td>e.g. <code class="inline">ESC</code> (escort / accompanier).</td></tr>
+        <tr><td>Identifier type qualifiers</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v2-0203</code></td><td><code class="inline">Identifier.type</code> (MR, VN, …).</td></tr>
+        <tr><td>Practitioner qualification</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v2-0360</code></td><td>Qualification value set on <code class="inline">Practitioner.qualification</code>.</td></tr>
+        <tr><td>Anatomical site qualifiers</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-ActSite</code></td><td>Injection site on <code class="inline">Immunization.site</code> (e.g. <code class="inline">LD</code>).</td></tr>
+        <tr><td>Route of administration</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration</code></td><td><code class="inline">Immunization.route</code>.</td></tr>
+        <tr><td>Role codes</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-RoleCode</code></td><td>Used by <code class="inline">$match</code> related-person relationships.</td></tr>
+        <tr><td>Data operations (Provenance)</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-DataOperation</code></td><td><code class="inline">Provenance.activity</code> for CREATE / UPDATE / DELETE.</td></tr>
+        <tr><td>Provenance participant type</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/provenance-participant-type</code></td><td><code class="inline">Provenance.agent.type</code>.</td></tr>
+        <tr><td>Media type</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/media-type</code></td><td>Recording / media classification.</td></tr>
+        <tr><td>Immunization recommendation status</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/immunization-recommendation-status</code></td><td><code class="inline">ImmunizationRecommendation.recommendation.forecastStatus</code>.</td></tr>
+        <tr><td>Immunization recommendation date criterion</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/immunization-recommendation-date-criterion</code></td><td><code class="inline">ImmunizationRecommendation.recommendation.dateCriterion.code</code>.</td></tr>
+        <tr><td><code class="inline">ServiceRequest.category</code> (procedural slices)</td><td><code class="inline">http://snomed.info/sct</code></td><td>Imaging <code class="inline">363679005</code>, procedure <code class="inline">387713003</code>, referral <code class="inline">3457005</code> per view definitions in <code class="inline">src/data/viewDefinitions.mjs</code>.</td></tr>
+        <tr><td><code class="inline">ServiceRequest.category</code> (lab slice)</td><td><code class="inline">http://snomed.info/sct</code></td><td>Laboratory procedure <code class="inline">108252007</code>. The HL7 <code class="inline">http://terminology.hl7.org/CodeSystem/service-category</code> system is referenced in FML source bindings; downstream stores MAY dual-code.</td></tr>
+        <tr><td>FHIR request-intent</td><td><code class="inline">http://hl7.org/fhir/request-intent</code></td><td>order / plan / proposal / reflex-order.</td></tr>
+        <tr><td>FHIR request-status</td><td><code class="inline">http://hl7.org/fhir/request-status</code></td><td>active / completed / cancelled / …</td></tr>
+        <tr><td>US Core pronouns / gender identity</td><td><code class="inline">http://hl7.org/fhir/us/core/StructureDefinition/us-core-pronouns</code>, <code class="inline">.../us-core-genderIdentity</code></td><td>Extensions re-used from US Core; value codings in LOINC.</td></tr>
+        <tr><td>FHIR <code class="inline">translation</code> extension</td><td><code class="inline">http://hl7.org/fhir/StructureDefinition/translation</code></td><td>Secondary display text on codings / strings.</td></tr>
+        <tr><td>FHIR <code class="inline">match-grade</code></td><td><code class="inline">http://hl7.org/fhir/StructureDefinition/match-grade</code></td><td>Patient <code class="inline">$match</code> grading.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="dsp-namespace">
+    <h2>DSP-FHIR URI namespace</h2>
+    <p>
+      DSP-FHIR reserves the following URI families. Downstream canonical stores SHOULD NOT publish
+      artefacts under these namespaces; layering happens by referencing DSP-FHIR canonicals from
+      the downstream R4 store, not by re-minting them.
+    </p>
+    <table>
+      <thead><tr><th scope="col">Family</th><th scope="col">URI pattern</th><th scope="col">Used for</th></tr></thead>
+      <tbody>
+        <tr><td>StructureDefinition</td><td><code class="inline">https://dsp-fhir.org/StructureDefinition/*</code></td><td>Profiles and extensions.</td></tr>
+        <tr><td>CodeSystem</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/*</code></td><td>DSP-specific code systems.</td></tr>
+        <tr><td>ValueSet</td><td><code class="inline">https://dsp-fhir.org/ValueSet/*</code></td><td>DSP-specific value sets.</td></tr>
+        <tr><td>ConceptMap</td><td><code class="inline">https://dsp-fhir.org/ConceptMap/*</code></td><td>DSP ↔ FHIR concept maps.</td></tr>
+        <tr><td>StructureMap</td><td><code class="inline">https://dsp-fhir.org/StructureMap/*</code></td><td>FML maps.</td></tr>
+        <tr><td>Identifier systems</td><td><code class="inline">https://dsp-fhir.org/identifier/*</code></td><td>Stable business identifiers minted by DSP-FHIR.</td></tr>
+        <tr><td>OperationDefinition / SubscriptionTopic</td><td><code class="inline">https://dsp-fhir.org/OperationDefinition/*</code>, <code class="inline">.../SubscriptionTopic/*</code></td><td>DSP-minted operations and topics.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Defined extensions</h3>
+    <p>
+      Inventory of every extension currently minted under <code class="inline">https://dsp-fhir.org/StructureDefinition/</code>
+      across the IG pages. Value types are taken from the mapping / GraphQL / example pages; where a value
+      type cannot be determined from the published artefacts it is marked <em>see extension definition</em>.
+    </p>
+    <table>
+      <thead><tr><th scope="col">Extension URL</th><th scope="col">Value type</th><th scope="col">Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">.../StructureDefinition/payload-version</code></td><td>complex</td><td>Payload major/minor/revision/quality on Encounter and Bundle.meta.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/dsp-payload-versions</code></td><td>complex (repeating)</td><td>Payload-version history reported by <code class="inline">$document</code>-style operations.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/external-callback-url</code></td><td><code class="inline">valueUrl</code></td><td>Async callback URL on Encounter.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/dsp-external-callback-url</code></td><td><code class="inline">valueUrl</code></td><td>Source-side alias for <code class="inline">external-callback-url</code> used in FML.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/dsp-tenant-organization</code></td><td><code class="inline">valueReference(Organization)</code></td><td>Tenant / organization scoping on Encounter.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/tenant-organization</code></td><td><code class="inline">valueReference(Organization)</code></td><td>Published alias of <code class="inline">dsp-tenant-organization</code>.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/dsp-timezone</code></td><td><code class="inline">valueString</code></td><td>IANA timezone on Encounter.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/recording-locale</code></td><td>see extension definition</td><td>BCP-47 locale of an audio/transcript recording.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/update-status</code></td><td><code class="inline">valueCode</code></td><td>NEW / UPDATED / DELETED mirror; Provenance is preferred.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/spoken-forms</code></td><td>complex (repeating <code class="inline">form</code> valueString)</td><td>Verbatim spoken forms attached to codings or sections.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/search-terms</code></td><td>complex (repeating valueString)</td><td>Additional search tokens for indexing.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/transcript-turn-refs</code></td><td>complex (repeating <code class="inline">turn</code> valueInteger)</td><td>Transcript turn indices that justify a clinical resource.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/transcript-speaker-count</code></td><td><code class="inline">valuePositiveInt</code></td><td>Distinct speaker count on the transcript DocumentReference.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/speaker-count</code></td><td><code class="inline">valuePositiveInt</code></td><td>Published alias of <code class="inline">transcript-speaker-count</code> on transcript DocumentReference.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/confidence-score</code></td><td><code class="inline">valueDecimal</code> (0–1)</td><td>Per-element extraction confidence.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/linkage-confidence</code></td><td><code class="inline">valueDecimal</code> (0–1)</td><td>Confidence of a link between resources.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/legacy-id</code></td><td><code class="inline">valueString</code></td><td>Legacy / source identifier on Composition.section.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/rendered-dosage-instruction</code></td><td><code class="inline">valueString</code></td><td>Pre-rendered dosage string (R5 <code class="inline">renderedDosageInstruction</code> back-port).</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/abbreviation</code></td><td><code class="inline">valueString</code></td><td>Short/abbreviated label on lab ServiceRequest.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/bodysite-laterality</code></td><td><code class="inline">valueCode</code> (bound to laterality VS)</td><td>Laterality qualifier on <code class="inline">ServiceRequest.bodySite</code>.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/imaging-modality</code></td><td><code class="inline">valueCoding</code> (bound to DCM)</td><td>DICOM modality on imaging ServiceRequest.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/imaging-views</code></td><td><code class="inline">valueString</code></td><td>Requested imaging views.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/imaging-contrast</code></td><td><code class="inline">valueCode</code> (contrast VS)</td><td>Contrast indication on imaging ServiceRequest.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/procedure-devices</code></td><td>complex (repeating <code class="inline">device</code> valueString)</td><td>Devices referenced by a procedure ServiceRequest.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/return-in</code></td><td><code class="inline">valueDuration</code></td><td>Follow-up return-in duration (alt to <code class="inline">occurrenceTiming.boundsDuration</code>).</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/approximation</code></td><td><code class="inline">valueBoolean</code></td><td>Marks a Duration as approximate (nested on boundsDuration).</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/prn</code></td><td><code class="inline">valueBoolean</code></td><td>As-needed flag on follow-up ServiceRequest.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/weight-limit</code></td><td><code class="inline">valueQuantity</code></td><td>Weight limit on a CarePlan activity.</td></tr>
+        <tr><td><code class="inline">.../StructureDefinition/approximate-match</code></td><td><code class="inline">valueBoolean</code></td><td>Patient <code class="inline">$match</code> approximate-match flag.</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-top: 0.75rem;">
+      See also <a href="/interop#extensions"><code class="inline">/interop#extensions</code></a>
+      for how downstream consumers should handle the DSP namespace.
+    </p>
+  </section>
+
   <div class="callout">
     The <code class="inline">https://dsp-fhir.org</code> base is illustrative. A real publication
     would mint these under an HL7-managed or vendor-owned canonical that commits to long-term
