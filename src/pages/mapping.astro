@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Tabs from '../components/Tabs.astro';
 ---
 <Layout title="Resource mapping catalog" active="mapping">
   <h1>DSP ↔ FHIR resource mapping</h1>
@@ -9,71 +10,518 @@ import Layout from '../layouts/Layout.astro';
   </p>
 
   <h2>Envelope</h2>
-  <div class="card" style="padding:0">
-    <table>
-      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><code class="inline">payload_version</code></td><td><code class="inline">Bundle.meta.tag</code> + DSP extension</td><td>4-part version (major/minor/revision/quality) encoded as structured extension.</td></tr>
-        <tr><td><code class="inline">priority</code></td><td><code class="inline">Encounter.priority</code> (R4 native) for encounter-scope; DSP extension on <code class="inline">Bundle</code> if truly envelope-scope</td><td>Bound to <code class="inline">request-priority</code> (routine/urgent/asap/stat).</td></tr>
-        <tr><td><code class="inline">external_callback_url</code></td><td>Extension <code class="inline">dsp-external-callback-url</code></td><td>Carried on Encounter; consumed by Dragon's <code class="inline">SubscriptionTopic</code>.</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <Tabs>
+    <Fragment slot="summary">
+      <div class="card" style="padding:0">
+        <table>
+          <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">payload_version</code></td><td><code class="inline">Bundle.meta.tag</code> + DSP extension</td><td>4-part version (major/minor/revision/quality) encoded as structured extension.</td></tr>
+            <tr><td><code class="inline">priority</code></td><td><code class="inline">Encounter.priority</code> (R4 native) for encounter-scope; DSP extension on <code class="inline">Bundle</code> if truly envelope-scope</td><td>Bound to <code class="inline">request-priority</code> (routine/urgent/asap/stat).</td></tr>
+            <tr><td><code class="inline">external_callback_url</code></td><td>Extension <code class="inline">dsp-external-callback-url</code></td><td>Carried on Encounter; consumed by Dragon's <code class="inline">SubscriptionTopic</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </Fragment>
+
+    <Fragment slot="example">
+      <div class="grid cols-2">
+        <div>
+          <h3>DSP</h3>
+<pre><code>{`{
+  "payload_version": {
+    "major": 1, "minor": 0, "revision": 0, "quality": "release"
+  },
+  "priority": "urgent",
+  "external_callback_url": "https://ehr.example.org/dsp/callback/abc-123",
+  "encounter": { "...": "..." }
+}`}</code></pre>
+        </div>
+        <div>
+          <h3>FHIR</h3>
+<pre><code>{`{
+  "resourceType": "Bundle",
+  "type": "document",
+  "meta": {
+    "tag": [
+      { "system": "https://dsp-fhir.org/CodeSystem/payload-version",
+        "code": "1.0.0" }
+    ],
+    "extension": [{
+      "url": "https://dsp-fhir.org/StructureDefinition/payload-version",
+      "extension": [
+        { "url": "major",    "valueInteger": 1 },
+        { "url": "minor",    "valueInteger": 0 },
+        { "url": "revision", "valueInteger": 0 },
+        { "url": "quality",  "valueCode":    "release" }
+      ]
+    }]
+  },
+  "entry": [{
+    "resource": {
+      "resourceType": "Encounter",
+      "priority": {
+        "coding": [{
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActPriority",
+          "code": "UR", "display": "urgent"
+        }]
+      },
+      "extension": [{
+        "url": "https://dsp-fhir.org/StructureDefinition/dsp-external-callback-url",
+        "valueUrl": "https://ehr.example.org/dsp/callback/abc-123"
+      }]
+    }
+  }]
+}`}</code></pre>
+        </div>
+      </div>
+    </Fragment>
+
+    <Fragment slot="fml">
+<pre><code>{`map "https://dsp-fhir.org/StructureMap/DspEnvelopeToBundle" = "DspEnvelopeToBundle"
+
+uses "https://dsp-fhir.org/StructureDefinition/DspPayload" alias DspPayload as source
+uses "http://hl7.org/fhir/StructureDefinition/Bundle"      alias Bundle     as target
+
+group Envelope(source src : DspPayload, target bnd : Bundle) {
+  src.payload_version as pv -> bnd.meta as m then {
+    pv -> m.tag as t then {
+      pv -> t.system = 'https://dsp-fhir.org/CodeSystem/payload-version',
+            t.code = (pv.major + '.' + pv.minor + '.' + pv.revision);
+    };
+    pv -> m.extension as ext then {
+      pv -> ext.url = 'https://dsp-fhir.org/StructureDefinition/payload-version';
+      pv.major    as v -> ext.extension as e then { v -> e.url = 'major',    e.value = v; };
+      pv.minor    as v -> ext.extension as e then { v -> e.url = 'minor',    e.value = v; };
+      pv.revision as v -> ext.extension as e then { v -> e.url = 'revision', e.value = v; };
+      pv.quality  as v -> ext.extension as e then { v -> e.url = 'quality',  e.value = v; };
+    };
+  };
+  src.priority as p -> bnd.entry.resource.priority "priority-on-encounter";
+  src.external_callback_url as u -> bnd.entry.resource.extension as ext then {
+    u -> ext.url = 'https://dsp-fhir.org/StructureDefinition/dsp-external-callback-url',
+         ext.value = u;
+  };
+}`}</code></pre>
+    </Fragment>
+  </Tabs>
 
   <h2>Encounter block</h2>
-  <div class="card" style="padding:0">
-    <table>
-      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><code class="inline">encounter.date_of_encounter</code></td><td><code class="inline">Encounter.period</code></td><td>ISO 8601.</td></tr>
-        <tr><td><code class="inline">encounter.status</code></td><td><code class="inline">Encounter.status</code></td><td>Map planned/in_progress/complete/cancelled to R4 codes.</td></tr>
-        <tr><td><code class="inline">encounter.external_encounter_ids</code></td><td><code class="inline">Encounter.identifier</code></td><td><code class="inline">type</code> → Identifier.type.</td></tr>
-        <tr><td><code class="inline">encounter.correlation_id</code></td><td><code class="inline">Encounter.identifier</code> (system=DAX)</td><td></td></tr>
-        <tr><td><code class="inline">patient.medical_record_number</code></td><td><code class="inline">Patient.identifier</code> (type=MR)</td><td></td></tr>
-        <tr><td><code class="inline">patient.name/gender/birthdate/age</code></td><td><code class="inline">Patient</code></td><td><code class="inline">age</code> is derived in FHIR; carry via extension if preserving source-reported.</td></tr>
-        <tr><td><code class="inline">patient.gender_identity</code> / <code class="inline">pronoun_preference</code></td><td>US Core extensions (<code class="inline">genderIdentity</code>, <code class="inline">pronouns</code>)</td><td></td></tr>
-        <tr><td><code class="inline">practitioner.npi</code></td><td><code class="inline">Practitioner.identifier</code> (system=<code class="inline">http://hl7.org/fhir/sid/us-npi</code>)</td><td></td></tr>
-        <tr><td><code class="inline">practitioner.qualifications/specialties/roles</code></td><td><code class="inline">Practitioner.qualification</code> + <code class="inline">PractitionerRole</code></td><td></td></tr>
-        <tr><td><code class="inline">visit.visit_type</code></td><td><code class="inline">Encounter.class</code> + <code class="inline">type</code></td><td></td></tr>
-        <tr><td><code class="inline">visit.admission_date/discharge_date</code></td><td><code class="inline">Encounter.period.start/end</code></td><td></td></tr>
-        <tr><td><code class="inline">visit.reason</code></td><td><code class="inline">Encounter.reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
-        <tr><td><code class="inline">visit.location</code></td><td><code class="inline">Encounter.location</code> → <code class="inline">Location</code></td><td></td></tr>
-        <tr><td><code class="inline">visit.accompanied_by</code></td><td><code class="inline">Encounter.participant</code> with role=accompanying</td><td>Or <code class="inline">RelatedPerson</code>.</td></tr>
-        <tr><td><code class="inline">organization_id</code> (on <code class="inline">encounter</code>)</td><td>Extension <code class="inline">dsp-tenant-organization</code> on <code class="inline">Encounter</code></td><td>This is the Nuance/MSFT tenant org UUID, not a clinical organization. Distinct from <code class="inline">Encounter.serviceProvider</code>.</td></tr>
-        <tr><td>Clinical organization (if distinct)</td><td><code class="inline">Encounter.serviceProvider</code> → <code class="inline">Organization</code></td><td>Populate when DSP provides the delivering facility/practice.</td></tr>
-        <tr><td><code class="inline">recording_locales</code> / <code class="inline">timezone</code></td><td>Extensions on <code class="inline">Encounter</code></td><td>Locale maps to <code class="inline">Composition.language</code> for the document.</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <Tabs>
+    <Fragment slot="summary">
+      <div class="card" style="padding:0">
+        <table>
+          <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">encounter.date_of_encounter</code></td><td><code class="inline">Encounter.period</code></td><td>ISO 8601.</td></tr>
+            <tr><td><code class="inline">encounter.status</code></td><td><code class="inline">Encounter.status</code></td><td>Map planned/in_progress/complete/cancelled to R4 codes.</td></tr>
+            <tr><td><code class="inline">encounter.external_encounter_ids</code></td><td><code class="inline">Encounter.identifier</code></td><td><code class="inline">type</code> → Identifier.type.</td></tr>
+            <tr><td><code class="inline">encounter.correlation_id</code></td><td><code class="inline">Encounter.identifier</code> (system=DAX)</td><td></td></tr>
+            <tr><td><code class="inline">patient.medical_record_number</code></td><td><code class="inline">Patient.identifier</code> (type=MR)</td><td></td></tr>
+            <tr><td><code class="inline">patient.name/gender/birthdate/age</code></td><td><code class="inline">Patient</code></td><td><code class="inline">age</code> is derived in FHIR; carry via extension if preserving source-reported.</td></tr>
+            <tr><td><code class="inline">patient.gender_identity</code> / <code class="inline">pronoun_preference</code></td><td>US Core extensions (<code class="inline">genderIdentity</code>, <code class="inline">pronouns</code>)</td><td></td></tr>
+            <tr><td><code class="inline">practitioner.npi</code></td><td><code class="inline">Practitioner.identifier</code> (system=<code class="inline">http://hl7.org/fhir/sid/us-npi</code>)</td><td></td></tr>
+            <tr><td><code class="inline">practitioner.qualifications/specialties/roles</code></td><td><code class="inline">Practitioner.qualification</code> + <code class="inline">PractitionerRole</code></td><td></td></tr>
+            <tr><td><code class="inline">visit.visit_type</code></td><td><code class="inline">Encounter.class</code> + <code class="inline">type</code></td><td></td></tr>
+            <tr><td><code class="inline">visit.admission_date/discharge_date</code></td><td><code class="inline">Encounter.period.start/end</code></td><td></td></tr>
+            <tr><td><code class="inline">visit.reason</code></td><td><code class="inline">Encounter.reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+            <tr><td><code class="inline">visit.location</code></td><td><code class="inline">Encounter.location</code> → <code class="inline">Location</code></td><td></td></tr>
+            <tr><td><code class="inline">visit.accompanied_by</code></td><td><code class="inline">Encounter.participant</code> with role=accompanying</td><td>Or <code class="inline">RelatedPerson</code>.</td></tr>
+            <tr><td><code class="inline">organization_id</code> (on <code class="inline">encounter</code>)</td><td>Extension <code class="inline">dsp-tenant-organization</code> on <code class="inline">Encounter</code></td><td>This is the Nuance/MSFT tenant org UUID, not a clinical organization. Distinct from <code class="inline">Encounter.serviceProvider</code>.</td></tr>
+            <tr><td>Clinical organization (if distinct)</td><td><code class="inline">Encounter.serviceProvider</code> → <code class="inline">Organization</code></td><td>Populate when DSP provides the delivering facility/practice.</td></tr>
+            <tr><td><code class="inline">recording_locales</code> / <code class="inline">timezone</code></td><td>Extensions on <code class="inline">Encounter</code></td><td>Locale maps to <code class="inline">Composition.language</code> for the document.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </Fragment>
+
+    <Fragment slot="example">
+      <div class="grid cols-2">
+        <div>
+          <h3>DSP</h3>
+<pre><code>{`{
+  "encounter": {
+    "date_of_encounter": "2026-04-23T14:00:00Z",
+    "status": "in_progress",
+    "correlation_id": "dax-7c21-...",
+    "external_encounter_ids": [
+      { "system": "urn:ehr:visit", "value": "V-9981", "type": "VN" }
+    ]
+  },
+  "patient": {
+    "medical_record_number": "MRN-67890",
+    "name": "Alice Example",
+    "gender": "female",
+    "birthdate": "1972-03-11",
+    "pronoun_preference": "she/her"
+  },
+  "practitioner": {
+    "npi": "1234567893",
+    "name": "Dr. Bob Example",
+    "specialties": ["internal medicine"]
+  },
+  "visit": {
+    "visit_type": "ambulatory",
+    "admission_date": "2026-04-23T14:00:00Z",
+    "accompanied_by": "Jane Doe, spouse"
+  },
+  "organization_id": "tenant-uuid-acme",
+  "recording_locales": ["en-US"],
+  "timezone": "America/Los_Angeles"
+}`}</code></pre>
+        </div>
+        <div>
+          <h3>FHIR</h3>
+<pre><code>{`{
+  "resourceType": "Encounter",
+  "id": "enc-12345",
+  "status": "in-progress",
+  "class": {
+    "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+    "code": "AMB", "display": "ambulatory"
+  },
+  "identifier": [
+    { "type": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "VN" }] },
+      "system": "urn:ehr:visit", "value": "V-9981" },
+    { "system": "https://dsp-fhir.org/correlation-id", "value": "dax-7c21-..." }
+  ],
+  "subject": { "reference": "Patient/pat-67890" },
+  "participant": [
+    { "individual": { "reference": "Practitioner/pract-001" } },
+    { "type": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType", "code": "ESC" }] }],
+      "individual": { "display": "Jane Doe, spouse" } }
+  ],
+  "period": { "start": "2026-04-23T14:00:00Z" },
+  "serviceProvider": { "reference": "Organization/facility-01" },
+  "extension": [
+    { "url": "https://dsp-fhir.org/StructureDefinition/dsp-tenant-organization",
+      "valueReference": { "reference": "Organization/tenant-uuid-acme" } },
+    { "url": "https://dsp-fhir.org/StructureDefinition/recording-locale",
+      "valueCode": "en-US" },
+    { "url": "https://dsp-fhir.org/StructureDefinition/dsp-timezone",
+      "valueString": "America/Los_Angeles" }
+  ]
+}
+
+// Patient
+{
+  "resourceType": "Patient", "id": "pat-67890",
+  "identifier": [{
+    "type": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "MR" }]},
+    "value": "MRN-67890"
+  }],
+  "name": [{ "text": "Alice Example" }],
+  "gender": "female", "birthDate": "1972-03-11",
+  "extension": [{
+    "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-pronouns",
+    "valueCodeableConcept": {
+      "coding": [{ "system": "http://loinc.org", "code": "LA29519-8", "display": "she/her" }]
+    }
+  }]
+}`}</code></pre>
+        </div>
+      </div>
+    </Fragment>
+
+    <Fragment slot="fml">
+<pre><code>{`map "https://dsp-fhir.org/StructureMap/DspEncounterToFhir" = "DspEncounterToFhir"
+
+uses "https://dsp-fhir.org/StructureDefinition/DspEncounter" alias DspEncounter as source
+uses "http://hl7.org/fhir/StructureDefinition/Encounter"     alias Encounter    as target
+
+group EncounterBlock(source src : DspEncounter, target enc : Encounter) {
+  src.encounter.date_of_encounter as d -> enc.period.start = d;
+  src.encounter.status            as s -> enc.status       = translate(s, 'dsp-status-to-fhir', 'code');
+  src.encounter.correlation_id    as c -> enc.identifier as id then {
+    c -> id.system = 'https://dsp-fhir.org/correlation-id', id.value = c;
+  };
+  src.encounter.external_encounter_ids as xid -> enc.identifier as id then {
+    xid.system as sys -> id.system = sys;
+    xid.value  as v   -> id.value  = v;
+    xid.type   as t   -> id.type.coding as coding then {
+      t -> coding.system = 'http://terminology.hl7.org/CodeSystem/v2-0203', coding.code = t;
+    };
+  };
+  src.visit.visit_type as vt -> enc.class as cls then {
+    vt -> cls.system = 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
+          cls.code = translate(vt, 'dsp-visit-type-to-v3', 'code');
+  };
+  src.visit.admission_date as a -> enc.period.start = a;
+  src.visit.discharge_date as d -> enc.period.end   = d;
+  src.visit.accompanied_by as ab -> enc.participant as p then {
+    ab -> p.type.coding.system = 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType',
+          p.type.coding.code = 'ESC',
+          p.individual.display = ab;
+  };
+  src.organization_id as oid -> enc.extension as ext then {
+    oid -> ext.url = 'https://dsp-fhir.org/StructureDefinition/dsp-tenant-organization',
+           ext.value = create('Reference') as r, r.reference = ('Organization/' + oid);
+  };
+}
+
+group PatientBlock(source src : DspPatient, target pat : Patient) {
+  src.medical_record_number as mrn -> pat.identifier as id then {
+    mrn -> id.type.coding.system = 'http://terminology.hl7.org/CodeSystem/v2-0203',
+           id.type.coding.code = 'MR',
+           id.value = mrn;
+  };
+  src.name              as n  -> pat.name.text = n;
+  src.gender            as g  -> pat.gender    = g;
+  src.birthdate         as b  -> pat.birthDate = b;
+  src.pronoun_preference as p -> pat.extension as ext then {
+    p -> ext.url = 'http://hl7.org/fhir/us/core/StructureDefinition/us-core-pronouns',
+         ext.value.coding.system = 'http://loinc.org',
+         ext.value.coding.display = p;
+  };
+}`}</code></pre>
+    </Fragment>
+  </Tabs>
 
   <h2>Recordings, sessions, transcript</h2>
-  <div class="card" style="padding:0">
-    <table>
-      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><code class="inline">recordings[]</code></td><td><code class="inline">Media</code> + <code class="inline">DocumentReference</code></td><td><code class="inline">Media.createdPeriod</code>, <code class="inline">Media.content.url</code>.</td></tr>
-        <tr><td><code class="inline">sessions[]</code></td><td><code class="inline">Provenance</code> with <code class="inline">agent</code> (user, org) and <code class="inline">activity</code>=DAX</td><td></td></tr>
-        <tr><td><code class="inline">transcript.turns[]</code></td><td><code class="inline">DocumentReference</code> JSON attachment (structured)</td><td>Integer turn indices preserved; see <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
-        <tr><td><code class="inline">transcript.speaker_count</code></td><td>Extension on <code class="inline">DocumentReference</code></td><td></td></tr>
-      </tbody>
-    </table>
-  </div>
+  <Tabs>
+    <Fragment slot="summary">
+      <div class="card" style="padding:0">
+        <table>
+          <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">recordings[]</code></td><td><code class="inline">Media</code> + <code class="inline">DocumentReference</code></td><td><code class="inline">Media.createdPeriod</code>, <code class="inline">Media.content.url</code>.</td></tr>
+            <tr><td><code class="inline">sessions[]</code></td><td><code class="inline">Provenance</code> with <code class="inline">agent</code> (user, org) and <code class="inline">activity</code>=DAX</td><td></td></tr>
+            <tr><td><code class="inline">transcript.turns[]</code></td><td><code class="inline">DocumentReference</code> JSON attachment (structured)</td><td>Integer turn indices preserved; see <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
+            <tr><td><code class="inline">transcript.speaker_count</code></td><td>Extension on <code class="inline">DocumentReference</code></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </Fragment>
+
+    <Fragment slot="example">
+      <div class="grid cols-2">
+        <div>
+          <h3>DSP</h3>
+<pre><code>{`{
+  "recordings": [
+    { "id": "rec-01",
+      "start_time": "2026-04-23T14:00:00Z",
+      "end_time":   "2026-04-23T14:18:30Z",
+      "media_url":  "https://dax.example.org/audio/rec-01.m4a",
+      "content_type": "audio/m4a" }
+  ],
+  "sessions": [
+    { "id": "sess-01",
+      "start_time": "2026-04-23T14:00:00Z",
+      "agent": { "user_id": "pract-001", "org_id": "tenant-uuid-acme" } }
+  ],
+  "transcript": {
+    "speaker_count": 2,
+    "turns": [
+      { "index": 0, "speaker": "provider", "start_time": "00:00:00.0",
+        "end_time": "00:00:04.2", "content": "What brings you in today?" }
+    ]
+  }
+}`}</code></pre>
+        </div>
+        <div>
+          <h3>FHIR</h3>
+<pre><code>{`// Media (audio recording)
+{
+  "resourceType": "Media", "id": "media-rec-01",
+  "status": "completed",
+  "type": { "coding": [{ "system":"http://terminology.hl7.org/CodeSystem/media-type",
+                         "code":"audio" }]},
+  "subject":  { "reference": "Patient/pat-67890" },
+  "encounter": { "reference": "Encounter/enc-12345" },
+  "createdPeriod": { "start":"2026-04-23T14:00:00Z", "end":"2026-04-23T14:18:30Z" },
+  "content": { "contentType":"audio/m4a",
+               "url":"https://dax.example.org/audio/rec-01.m4a" }
+}
+
+// Provenance (capture session)
+{
+  "resourceType": "Provenance", "id": "prov-sess-01",
+  "target": [{ "reference":"Encounter/enc-12345" }],
+  "recorded": "2026-04-23T14:00:00Z",
+  "activity": {
+    "coding": [{ "system":"https://dsp-fhir.org/CodeSystem/activity",
+                 "code":"DAX_CAPTURE" }]
+  },
+  "agent": [
+    { "who": { "reference":"Practitioner/pract-001" } },
+    { "who": { "reference":"Organization/tenant-uuid-acme" },
+      "type": { "coding":[{ "system":"http://terminology.hl7.org/CodeSystem/provenance-participant-type",
+                            "code":"custodian" }]} }
+  ]
+}
+
+// DocumentReference (transcript payload)
+{
+  "resourceType": "DocumentReference", "id": "dr-transcript-001",
+  "status": "current", "docStatus": "preliminary",
+  "type": { "coding": [{ "system":"http://loinc.org",
+                         "code":"11488-4","display":"Consultation note" }]},
+  "subject":  { "reference":"Patient/pat-67890" },
+  "context":  { "encounter": [{ "reference":"Encounter/enc-12345" }] },
+  "content": [{
+    "attachment": {
+      "contentType":"application/json",
+      "url":"https://dax.example.org/transcripts/dr-transcript-001.json"
+    }
+  }],
+  "extension": [{
+    "url":"https://dsp-fhir.org/StructureDefinition/transcript-speaker-count",
+    "valueInteger": 2
+  }]
+}`}</code></pre>
+        </div>
+      </div>
+    </Fragment>
+
+    <Fragment slot="fml">
+<pre><code>{`map "https://dsp-fhir.org/StructureMap/DspRecordingsToFhir" = "DspRecordingsToFhir"
+
+uses "https://dsp-fhir.org/StructureDefinition/DspRecording" alias DspRecording as source
+uses "http://hl7.org/fhir/StructureDefinition/Media"         alias Media        as target
+
+group Recording(source rec : DspRecording, target m : Media) {
+  rec.id           as i -> m.id = i;
+  rec.start_time   as s -> m.createdPeriod.start = s;
+  rec.end_time     as e -> m.createdPeriod.end   = e;
+  rec.media_url    as u -> m.content.url         = u;
+  rec.content_type as c -> m.content.contentType = c;
+  rec -> m.status = 'completed';
+}
+
+group Session(source sess : DspSession, target p : Provenance) {
+  sess.id         as i  -> p.id        = i;
+  sess.start_time as s  -> p.recorded  = s;
+  sess -> p.activity.coding as c then {
+    sess -> c.system = 'https://dsp-fhir.org/CodeSystem/activity',
+            c.code   = 'DAX_CAPTURE';
+  };
+  sess.agent.user_id as u -> p.agent as a then {
+    u -> a.who = create('Reference') as r, r.reference = ('Practitioner/' + u);
+  };
+  sess.agent.org_id as o -> p.agent as a then {
+    o -> a.who = create('Reference') as r, r.reference = ('Organization/' + o),
+         a.type.coding.system = 'http://terminology.hl7.org/CodeSystem/provenance-participant-type',
+         a.type.coding.code = 'custodian';
+  };
+}
+
+group Transcript(source t : DspTranscript, target dr : DocumentReference) {
+  t -> dr.status    = 'current',
+       dr.docStatus = 'preliminary',
+       dr.content.attachment.contentType = 'application/json';
+  t.speaker_count as sc -> dr.extension as ext then {
+    sc -> ext.url = 'https://dsp-fhir.org/StructureDefinition/transcript-speaker-count',
+          ext.value = sc;
+  };
+}`}</code></pre>
+    </Fragment>
+  </Tabs>
 
   <h2>Document</h2>
-  <div class="card" style="padding:0">
-    <table>
-      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><code class="inline">document</code> (unstructured)</td><td><code class="inline">DocumentReference</code> with attachment</td><td></td></tr>
-        <tr><td><code class="inline">document</code> (structured)</td><td><code class="inline">Composition</code> with sections</td><td>Each <code class="inline">document_section</code> resource becomes a <code class="inline">Composition.section</code>.</td></tr>
-        <tr><td><code class="inline">document_status</code></td><td><code class="inline">Composition.status</code> / <code class="inline">DocumentReference.status</code> + <code class="inline">docStatus</code></td><td>Map <code class="inline">final_signed</code>→<code class="inline">final</code>+<code class="inline">docStatus=final</code>.</td></tr>
-        <tr><td><code class="inline">document_type</code></td><td><code class="inline">Composition.type</code> (LOINC)</td><td></td></tr>
-        <tr><td><code class="inline">report_locale</code></td><td><code class="inline">Composition.language</code></td><td></td></tr>
-      </tbody>
-    </table>
-  </div>
+  <Tabs>
+    <Fragment slot="summary">
+      <div class="card" style="padding:0">
+        <table>
+          <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">document</code> (unstructured)</td><td><code class="inline">DocumentReference</code> with attachment</td><td></td></tr>
+            <tr><td><code class="inline">document</code> (structured)</td><td><code class="inline">Composition</code> with sections</td><td>Each <code class="inline">document_section</code> resource becomes a <code class="inline">Composition.section</code>.</td></tr>
+            <tr><td><code class="inline">document_status</code></td><td><code class="inline">Composition.status</code> / <code class="inline">DocumentReference.status</code> + <code class="inline">docStatus</code></td><td>Map <code class="inline">final_signed</code>→<code class="inline">final</code>+<code class="inline">docStatus=final</code>.</td></tr>
+            <tr><td><code class="inline">document_type</code></td><td><code class="inline">Composition.type</code> (LOINC)</td><td></td></tr>
+            <tr><td><code class="inline">report_locale</code></td><td><code class="inline">Composition.language</code></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </Fragment>
+
+    <Fragment slot="example">
+      <div class="grid cols-2">
+        <div>
+          <h3>DSP</h3>
+<pre><code>{`{
+  "document_type": "progress_note",
+  "document_status": "final_signed",
+  "report_locale": "en-US",
+  "sections": [
+    { "section_type": "hpi",     "text": "..." },
+    { "section_type": "overview","text": "..." },
+    { "section_type": "a_and_p", "text": "..." }
+  ]
+}`}</code></pre>
+        </div>
+        <div>
+          <h3>FHIR</h3>
+<pre><code>{`{
+  "resourceType": "Composition", "id": "comp-001",
+  "status": "final",
+  "type": {
+    "coding": [{ "system":"http://loinc.org","code":"11506-3",
+                 "display":"Progress note" }]
+  },
+  "subject":   { "reference":"Patient/pat-67890" },
+  "encounter": { "reference":"Encounter/enc-12345" },
+  "date":      "2026-04-23T14:30:00Z",
+  "author":    [{ "reference":"Practitioner/pract-001" }],
+  "title":     "Progress note",
+  "language":  "en-US",
+  "section": [
+    { "title":"History of present illness",
+      "code": { "coding":[{"system":"http://loinc.org","code":"10164-2"}]},
+      "text": { "status":"generated","div":"<div xmlns=\\"http://www.w3.org/1999/xhtml\\">…</div>" } },
+    { "title":"Overview",
+      "code": { "coding":[{"system":"http://loinc.org","code":"51848-0"}]} },
+    { "title":"Assessment and plan",
+      "code": { "coding":[{"system":"http://loinc.org","code":"51847-2"}]} }
+  ]
+}
+
+// Optional companion DocumentReference wrapping the bundle:
+{
+  "resourceType":"DocumentReference","id":"dr-note-001",
+  "status":"current","docStatus":"final",
+  "type": { "coding":[{"system":"http://loinc.org","code":"11506-3"}]},
+  "subject": { "reference":"Patient/pat-67890" },
+  "context": { "encounter":[{"reference":"Encounter/enc-12345"}] }
+}`}</code></pre>
+        </div>
+      </div>
+    </Fragment>
+
+    <Fragment slot="fml">
+<pre><code>{`map "https://dsp-fhir.org/StructureMap/DspDocumentToComposition" = "DspDocumentToComposition"
+
+uses "https://dsp-fhir.org/StructureDefinition/DspDocument" alias DspDocument as source
+uses "http://hl7.org/fhir/StructureDefinition/Composition"  alias Composition as target
+
+group DocumentToComposition(source src : DspDocument, target cmp : Composition) {
+  src.document_type as t -> cmp.type.coding as c then {
+    t -> c.system = 'http://loinc.org',
+         c.code   = translate(t, 'dsp-document-type-to-loinc', 'code');
+  };
+  src.document_status as s -> cmp.status = translate(s, 'dsp-doc-status-to-fhir', 'code');
+  src.report_locale   as l -> cmp.language = l;
+
+  src.sections as section -> cmp.section as sec then SectionToFhirSection(section, sec);
+}
+
+group SectionToFhirSection(source ds : DspSection, target sec : Composition.Section) {
+  ds.section_type as st -> sec.code.coding as cc then {
+    st -> cc.system = 'http://loinc.org',
+          cc.code   = translate(st, 'dsp-section-type-to-loinc', 'code');
+  };
+  ds.text as txt -> sec.text as narr then {
+    txt -> narr.status = 'generated',
+           narr.div    = ('<div xmlns="http://www.w3.org/1999/xhtml">' + txt + '</div>');
+  };
+}`}</code></pre>
+    </Fragment>
+  </Tabs>
 
   <h2>Resources (clinical types)</h2>
+  <p class="muted" style="margin-top:-4px">
+    Each row links to a deep-dive page with field-by-field table, side-by-side example, and FML mapping.
+  </p>
   <div class="card" style="padding:0">
     <table>
       <thead><tr><th>DSP content_type</th><th>FHIR resource</th><th>Profile lives at</th></tr></thead>
@@ -97,26 +545,187 @@ import Layout from '../layouts/Layout.astro';
   </div>
 
   <h2>Cross-cutting resource fields</h2>
-  <div class="card" style="padding:0">
-    <table>
-      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td><code class="inline">context.codes</code></td><td><code class="inline">.code</code> or <code class="inline">.category</code> CodeableConcept</td><td>LOINC/SNOMED.</td></tr>
-        <tr><td><code class="inline">context.display_description</code> (localized)</td><td><code class="inline">Coding.display</code> + <code class="inline">translation</code> extension</td><td>Per-locale labels.</td></tr>
-        <tr><td><code class="inline">context.spoken_forms</code></td><td>DSP extension <code class="inline">spoken-forms</code></td><td>Not a native FHIR concept.</td></tr>
-        <tr><td><code class="inline">provenance: [turn indices]</code></td><td><code class="inline">Provenance.entity.what</code> + DSP extension for integer refs</td><td>See <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
-        <tr><td><code class="inline">confidence_score</code></td><td>DSP extension <code class="inline">confidence-score</code>; applicable only where DSP populates it (orders in 1.0)</td><td>0..1 decimal. Context is "any Resource" so the extension is tolerant of future expansion beyond orders.</td></tr>
-        <tr><td><code class="inline">source.type</code></td><td><code class="inline">Provenance.agent.type</code></td><td><code class="inline">dragon_copilot</code> / <code class="inline">ehr_integration</code> / <code class="inline">extension</code>.</td></tr>
-        <tr><td><code class="inline">parent_reference</code> / <code class="inline">child_references</code></td><td>Resource-specific reference (<code class="inline">basedOn</code>, <code class="inline">partOf</code>, <code class="inline">reasonReference</code>)</td><td>Slot into the semantically correct field per resource type.</td></tr>
-        <tr><td><code class="inline">update_status</code></td><td><code class="inline">meta.versionId</code> + <code class="inline">Provenance.activity</code></td><td>NEW = no prior version; UPDATED = new version; DELETED = <code class="inline">DELETE</code> transaction.</td></tr>
-        <tr><td><code class="inline">search_terms</code></td><td>DSP extension or <code class="inline">CodeableConcept.text</code> synonyms</td><td>Not clinical; kept as hint metadata.</td></tr>
-        <tr><td><code class="inline">external_reference</code></td><td><code class="inline">identifier</code> + <code class="inline">meta.source</code></td><td><code class="inline">linkage_confidence</code> → DSP extension.</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <Tabs>
+    <Fragment slot="summary">
+      <div class="card" style="padding:0">
+        <table>
+          <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">context.codes</code></td><td><code class="inline">.code</code> or <code class="inline">.category</code> CodeableConcept</td><td>LOINC/SNOMED.</td></tr>
+            <tr><td><code class="inline">context.display_description</code> (localized)</td><td><code class="inline">Coding.display</code> + <code class="inline">translation</code> extension</td><td>Per-locale labels.</td></tr>
+            <tr><td><code class="inline">context.spoken_forms</code></td><td>DSP extension <code class="inline">spoken-forms</code></td><td>Not a native FHIR concept.</td></tr>
+            <tr><td><code class="inline">provenance: [turn indices]</code></td><td><code class="inline">Provenance.entity.what</code> + DSP extension for integer refs</td><td>See <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
+            <tr><td><code class="inline">confidence_score</code></td><td>DSP extension <code class="inline">confidence-score</code>; applicable only where DSP populates it (orders in 1.0)</td><td>0..1 decimal. Context is "any Resource" so the extension is tolerant of future expansion beyond orders.</td></tr>
+            <tr><td><code class="inline">source.type</code></td><td><code class="inline">Provenance.agent.type</code></td><td><code class="inline">dragon_copilot</code> / <code class="inline">ehr_integration</code> / <code class="inline">extension</code>.</td></tr>
+            <tr><td><code class="inline">parent_reference</code> / <code class="inline">child_references</code></td><td>Resource-specific reference (<code class="inline">basedOn</code>, <code class="inline">partOf</code>, <code class="inline">reasonReference</code>)</td><td>Slot into the semantically correct field per resource type.</td></tr>
+            <tr><td><code class="inline">update_status</code></td><td><code class="inline">meta.versionId</code> + <code class="inline">Provenance.activity</code></td><td>NEW = no prior version; UPDATED = new version; DELETED = <code class="inline">DELETE</code> transaction.</td></tr>
+            <tr><td><code class="inline">search_terms</code></td><td>DSP extension or <code class="inline">CodeableConcept.text</code> synonyms</td><td>Not clinical; kept as hint metadata.</td></tr>
+            <tr><td><code class="inline">external_reference</code></td><td><code class="inline">identifier</code> + <code class="inline">meta.source</code></td><td><code class="inline">linkage_confidence</code> → DSP extension.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </Fragment>
+
+    <Fragment slot="example">
+      <div class="grid cols-2">
+        <div>
+          <h3>DSP (fragment on any resource)</h3>
+<pre><code>{`{
+  "context": {
+    "codes": [
+      { "system":"http://snomed.info/sct","code":"195967001" },
+      { "system":"http://hl7.org/fhir/sid/icd-10-cm","code":"J45.909" }
+    ],
+    "display_description": {
+      "en-US":"Asthma, unspecified, uncomplicated",
+      "es-US":"Asma, no especificada"
+    },
+    "spoken_forms": ["asthma", "reactive airway"]
+  },
+  "confidence_score": 0.87,
+  "provenance": [10, 11],
+  "source": { "type": "dragon_copilot" },
+  "search_terms": ["asthma","wheeze"],
+  "external_reference": {
+    "system":"urn:ehr:problem","value":"P-551",
+    "linkage_confidence": 0.93
+  },
+  "update_status": "UPDATED"
+}`}</code></pre>
+        </div>
+        <div>
+          <h3>FHIR (extensions + Provenance)</h3>
+<pre><code>{`{
+  "resourceType":"MedicationRequest","id":"med-001",
+  "code": {
+    "coding":[
+      { "system":"http://snomed.info/sct","code":"195967001",
+        "_display":{ "extension":[{
+          "url":"http://hl7.org/fhir/StructureDefinition/translation",
+          "extension":[
+            { "url":"lang",    "valueCode":"es-US" },
+            { "url":"content", "valueString":"Asma, no especificada" }
+          ]
+        }]},
+        "display":"Asthma, unspecified, uncomplicated"
+      },
+      { "system":"http://hl7.org/fhir/sid/icd-10-cm","code":"J45.909" }
+    ],
+    "text":"asthma / wheeze"
+  },
+  "extension":[
+    { "url":"https://dsp-fhir.org/StructureDefinition/spoken-forms",
+      "extension":[
+        { "url":"form","valueString":"asthma" },
+        { "url":"form","valueString":"reactive airway" }
+      ]},
+    { "url":"https://dsp-fhir.org/StructureDefinition/confidence-score",
+      "valueDecimal":0.87 },
+    { "url":"https://dsp-fhir.org/StructureDefinition/search-terms",
+      "extension":[
+        { "url":"term","valueString":"asthma" },
+        { "url":"term","valueString":"wheeze" }
+      ]},
+    { "url":"https://dsp-fhir.org/StructureDefinition/transcript-turn-refs",
+      "extension":[
+        { "url":"transcript","valueReference":{"reference":"DocumentReference/dr-transcript-001/_history/3"}},
+        { "url":"turn","valueInteger":10 },
+        { "url":"turn","valueInteger":11 }
+      ]}
+  ],
+  "identifier":[{
+    "system":"urn:ehr:problem","value":"P-551",
+    "extension":[{
+      "url":"https://dsp-fhir.org/StructureDefinition/linkage-confidence",
+      "valueDecimal":0.93
+    }]
+  }],
+  "meta": { "source":"https://ehr.example.org/...", "versionId":"2" }
+}
+
+// Derive update_status from meta.versionId + a Provenance per mutation:
+{
+  "resourceType":"Provenance",
+  "target":[{"reference":"MedicationRequest/med-001"}],
+  "recorded":"2026-04-23T14:05:00Z",
+  "activity":{"coding":[{
+    "system":"http://terminology.hl7.org/CodeSystem/v3-DataOperation",
+    "code":"UPDATE"
+  }]},
+  "agent":[{
+    "type":{"coding":[{"system":"https://dsp-fhir.org/CodeSystem/source-type","code":"dragon_copilot"}]},
+    "who":{"display":"Dragon Copilot"}
+  }]
+}`}</code></pre>
+        </div>
+      </div>
+    </Fragment>
+
+    <Fragment slot="fml">
+<pre><code>{`map "https://dsp-fhir.org/StructureMap/DspCrossCutting" = "DspCrossCutting"
+
+// These rules apply to any DSP resource with an Element-level 'context' block.
+
+group CrossCutting(source src : DspResourceFragment, target dst : Resource) {
+
+  // Codes → .code.coding
+  src.context.codes as c -> dst.code.coding as cc then {
+    c.system as s -> cc.system = s;
+    c.code   as k -> cc.code   = k;
+  };
+
+  // Localized display → Coding.display + translation extension
+  src.context.display_description as dd -> dst.code.coding.first() as cc then {
+    dd.item(0) as primary -> cc.display = primary.value;
+    dd.where(key != 'en-US') as other -> cc._display.extension as ext then {
+      other -> ext.url = 'http://hl7.org/fhir/StructureDefinition/translation';
+      other.key   as k -> ext.extension as e then { k -> e.url='lang',    e.value=k; };
+      other.value as v -> ext.extension as e then { v -> e.url='content', e.value=v; };
+    };
+  };
+
+  // Spoken forms → DSP extension
+  src.context.spoken_forms as sf -> dst.extension as ext then {
+    sf -> ext.url = 'https://dsp-fhir.org/StructureDefinition/spoken-forms';
+    sf as form -> ext.extension as e then { form -> e.url='form', e.value=form; };
+  };
+
+  // Confidence → decimal extension
+  src.confidence_score as cs -> dst.extension as ext then {
+    cs -> ext.url = 'https://dsp-fhir.org/StructureDefinition/confidence-score',
+          ext.value = cs;
+  };
+
+  // Turn refs → structured extension
+  src.provenance as turns -> dst.extension as ext then {
+    turns -> ext.url = 'https://dsp-fhir.org/StructureDefinition/transcript-turn-refs';
+    turns as idx -> ext.extension as e then { idx -> e.url='turn', e.value=idx; };
+  };
+
+  // Search terms → extension
+  src.search_terms as st -> dst.extension as ext then {
+    st -> ext.url = 'https://dsp-fhir.org/StructureDefinition/search-terms';
+    st as term -> ext.extension as e then { term -> e.url='term', e.value=term; };
+  };
+
+  // External reference → Identifier (+ linkage-confidence extension)
+  src.external_reference as xr -> dst.identifier as id then {
+    xr.system as s -> id.system = s;
+    xr.value  as v -> id.value  = v;
+    xr.linkage_confidence as lc -> id.extension as ext then {
+      lc -> ext.url = 'https://dsp-fhir.org/StructureDefinition/linkage-confidence',
+            ext.value = lc;
+    };
+  };
+}
+
+// update_status is NOT a forward map: it's derived on read from
+// meta.versionId + Provenance.activity. No FML rule; see operations: $everything?_since=.`}</code></pre>
+    </Fragment>
+  </Tabs>
 
   <p style="margin-top:30px">
-    Deep-dive pages: 
+    Deep-dive pages:
     <a href="/dsp-fhir/mapping/condition">Condition</a> ·
     <a href="/dsp-fhir/mapping/medication">Medication</a> ·
     <a href="/dsp-fhir/mapping/lab">Lab</a> ·
