@@ -1,0 +1,86 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Procedure order" active="mapping">
+  <MapHeader
+    title="Procedure order"
+    dspType="order.procedure"
+    fhirResource="ServiceRequest (category=procedure) → Procedure (when performed)"
+    summary="An order for a procedure is a ServiceRequest; the performed procedure itself is a separate Procedure resource created later. DSP's order_data fields map onto both sides."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: PROCEDURE_ORDER</code></td><td><code class="inline">ServiceRequest.category = procedure</code></td><td><code class="inline">http://snomed.info/sct|387713003</code>.</td></tr>
+        <tr><td><code class="inline">description</code></td><td><code class="inline">ServiceRequest.code.text</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.procedure.codes</code> (CPT)</td><td><code class="inline">ServiceRequest.code.coding[]</code></td><td>+ SNOMED.</td></tr>
+        <tr><td><code class="inline">order_data.surgical_team</code></td><td><code class="inline">ServiceRequest.performer[]</code> → Practitioner</td><td>Or preserve narrative in <code class="inline">note.text</code> if unresolved.</td></tr>
+        <tr><td><code class="inline">order_data.procedure_location</code></td><td><code class="inline">ServiceRequest.locationReference</code> → Location</td><td></td></tr>
+        <tr><td><code class="inline">order_data.devices</code></td><td>Extension <code class="inline">procedure-devices</code> or downstream <code class="inline">Procedure.usedReference</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.instructions</code></td><td><code class="inline">ServiceRequest.patientInstruction</code> or <code class="inline">note.text</code></td><td></td></tr>
+        <tr><td><code class="inline">reason</code> / <code class="inline">reason_references</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4",
+  "type": "PROCEDURE_ORDER",
+  "context": { "content_type": "order.procedure" },
+  "description": "Laparoscopic cholecystectomy for gallbladder stones",
+  "intent": "order",
+  "reason": "Gallbladder stones",
+  "reason_references": ["a12345b67890cdef1234567890abcdef"],
+  "order_data": {
+    "procedure": {
+      "text":"Laparoscopic cholecystectomy",
+      "codes":[{"system":"CPT","code":"47562"}]
+    },
+    "surgical_team":["Dr. Sarah Johnson, MD","Dr. Michael Chen, MD"],
+    "procedure_location":"OR 3, Main Hospital",
+    "devices":["Laparoscopic camera system","Electrocautery device"],
+    "instructions":"NPO after midnight. Pre-operative antibiotics per protocol."
+  },
+  "confidence_score": 1.0
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[{"coding":[{"system":"http://snomed.info/sct","code":"387713003","display":"Surgical procedure"}]}],
+  "code":{
+    "text":"Laparoscopic cholecystectomy",
+    "coding":[{"system":"http://www.ama-assn.org/go/cpt","code":"47562"}]
+  },
+  "reasonCode":[{"text":"Gallbladder stones"}],
+  "reasonReference":[{"reference":"Condition/cond-gbs-001"}],
+  "performer":[
+    {"display":"Dr. Sarah Johnson, MD"},
+    {"display":"Dr. Michael Chen, MD"}
+  ],
+  "locationReference":[{"display":"OR 3, Main Hospital"}],
+  "patientInstruction":"NPO after midnight. Pre-operative antibiotics per protocol.",
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "extension":[
+    {"url":"https://dsp-fhir.org/StructureDefinition/procedure-devices",
+     "extension":[
+       {"url":"device","valueString":"Laparoscopic camera system"},
+       {"url":"device","valueString":"Electrocautery device"}
+     ]},
+    {"url":"https://dsp-fhir.org/StructureDefinition/confidence-score","valueDecimal":1.0}
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+</Layout>

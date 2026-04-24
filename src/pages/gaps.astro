@@ -1,0 +1,95 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Gaps & open questions" active="gaps">
+  <h1>Where FHIR stretches, and how we extend it</h1>
+  <p class="lead">
+    An honest inventory of DSP concepts that FHIR R4 does not model natively, and the design
+    choices the IG has to make for each.
+  </p>
+
+  <h2>1. Transcript turns as provenance</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> <code class="inline">provenance: [11, 15, 17]</code> — integer indices into <code class="inline">transcript.turns[]</code>.</p>
+    <p><strong>FHIR gap:</strong> <code class="inline">Provenance</code> expects <code class="inline">Reference(Any)</code>, not integer offsets. Transcript turns are not a FHIR resource.</p>
+    <p><strong>Options:</strong></p>
+    <ul class="clean">
+      <li><strong>A</strong> — Emit turns as <code class="inline">Observation</code> resources (one per turn) and reference them. <em>Cleanest FHIR-native, highest resource count.</em></li>
+      <li><strong>B</strong> — Store the turn array as a <code class="inline">DocumentReference</code> JSON attachment; reference by fragment (<code class="inline">DocumentReference/xyz#turn=15</code>) via <code class="inline">Provenance.entity.what</code>. <em>Lightweight; fragment semantics are DSP-local.</em></li>
+      <li><strong>C</strong> — Keep integer indices on each resource via <code class="inline">transcript-turn-refs</code> extension; emit a single <code class="inline">Provenance</code> that references the transcript DocumentReference as a whole. <em>Simplest round-trip; this site recommends it.</em></li>
+    </ul>
+    <p><span class="badge ok">Pick</span> Option C for day-1, with a documented path to B/A as consumers need richer traversal. Server-side surfacing via <a href="/dsp-fhir/operations#ground"><code class="inline">$ground</code></a> (the one genuinely custom op in the IG).</p>
+  </div>
+
+  <h2>2. <code class="inline">confidence_score</code></h2>
+  <div class="card">
+    <p><strong>DSP:</strong> 0..1 decimal on orders (and likely expanding).</p>
+    <p><strong>FHIR gap:</strong> R4 has no element on <code class="inline">MedicationRequest</code> / <code class="inline">ServiceRequest</code> / <code class="inline">Condition</code>. R5 adds <code class="inline">ClinicalImpression.certainty</code> but not on request resources.</p>
+    <p><strong>Pick:</strong> DSP extension <code class="inline">confidence-score</code> (valueDecimal) usable on any resource. Align its valueset with R5 <code class="inline">certainty</code> when a consumer asks for it via xver. Indexed via <a href="/dsp-fhir/operations#confidence-search">SearchParameter + cross-type search</a> — no custom op.</p>
+  </div>
+
+  <h2>3. <code class="inline">payload_version</code></h2>
+  <div class="card">
+    <p><strong>DSP:</strong> <code class="inline">major.minor.revision</code> + <code class="inline">quality</code> enum + key/value metadata.</p>
+    <p><strong>FHIR gap:</strong> <code class="inline">meta.versionId</code> is a monotonic string, not structured; <code class="inline">meta.tag</code> is a flat Coding list.</p>
+    <p><strong>Pick:</strong> Complex extension <code class="inline">payload-version</code> on <code class="inline">Encounter</code> (and on the root <code class="inline">Composition</code> for document-centric consumers). Surface a denormalized <code class="inline">meta.tag</code> so servers can query without parsing the extension. Advertise accepted/emitted versions via <a href="/dsp-fhir/operations#payload-version-advert"><code class="inline">CapabilityStatement</code> extension</a>; normative rule <a href="/dsp-fhir/ig#normative-rules">R3</a> binds the behaviour.</p>
+  </div>
+
+  <h2>4. <code class="inline">spoken_forms</code></h2>
+  <div class="card">
+    <p><strong>DSP:</strong> An array of strings ("HPI", "subjective") — the voice-command handles for a section or concept.</p>
+    <p><strong>FHIR gap:</strong> <code class="inline">CodeSystem.concept.designation</code> is the closest analogue but lives on the terminology, not the instance.</p>
+    <p><strong>Pick:</strong> Instance-level extension <code class="inline">spoken-forms</code>. Publish a companion <code class="inline">CodeSystem</code> of canonical spoken forms with <code class="inline">designation</code>s; lookups close with <a href="/dsp-fhir/operations#spoken-form">standard <code class="inline">CodeSystem/$lookup</code> and <code class="inline">ValueSet/$expand?filter=</code></a> — no custom op.</p>
+  </div>
+
+  <h2>5. <code class="inline">update_status</code> = NEW / UPDATED / DELETED</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> In-band state flag per resource.</p>
+    <p><strong>FHIR gap:</strong> FHIR uses REST verbs + <code class="inline">meta.versionId</code> + history; no inline flag.</p>
+    <p><strong>Pick:</strong> Prefer FHIR semantics — a <code class="inline">transaction</code> Bundle with <code class="inline">POST</code> (new), <code class="inline">PUT</code> (update), <code class="inline">DELETE</code> (deleted). If the DSP producer must retain the flag verbatim, expose it as a <code class="inline">Provenance.activity</code> code. Consumers read deltas via <a href="/dsp-fhir/operations#changes-since"><code class="inline">Encounter/$everything?_since=</code></a> — no custom op.</p>
+  </div>
+
+  <h2>6. <code class="inline">display_description.locale</code> (localized labels)</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> Per-locale labels for the section/concept.</p>
+    <p><strong>FHIR:</strong> Use <code class="inline">translation</code> extension on <code class="inline">string</code>/<code class="inline">Coding</code> (<code class="inline">http://hl7.org/fhir/StructureDefinition/translation</code>).</p>
+    <p><strong>Pick:</strong> Reuse the core <code class="inline">translation</code> extension. No DSP-specific extension needed.</p>
+  </div>
+
+  <h2>7. Follow-up without an appointment</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> Provider-intent "see me in 2 weeks, PRN" — not a scheduled visit.</p>
+    <p><strong>FHIR gap:</strong> <code class="inline">Appointment</code> is booked; <code class="inline">ServiceRequest</code> is generic.</p>
+    <p><strong>Pick:</strong> <code class="inline">DspServiceRequest-FollowUp</code> profile on <code class="inline">ServiceRequest</code> with <code class="inline">return-in</code>, <code class="inline">approximation</code>, <code class="inline">prn</code> extensions. Downstream scheduling realizes it as <code class="inline">Appointment.basedOn</code> via <a href="/dsp-fhir/operations#materialize-appointment"><code class="inline">PlanDefinition/$apply</code> / <code class="inline">ActivityDefinition/$apply</code></a> — no custom op.</p>
+  </div>
+
+  <h2>8. Search terms / synonyms</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> <code class="inline">search_terms[]</code> with a <code class="inline">scope</code> and free text.</p>
+    <p><strong>FHIR gap:</strong> No UX-hint slot on clinical resources.</p>
+    <p><strong>Pick:</strong> Extension <code class="inline">search-terms</code> (repeating complex). Consider indexing them server-side via <code class="inline">SearchParameter</code> for partner-side UIs.</p>
+  </div>
+
+  <h2>9. Recording sources + session identifiers</h2>
+  <div class="card">
+    <p><strong>DSP:</strong> <code class="inline">DAXAPP</code>, <code class="inline">DAXKIT.haiku</code>, <code class="inline">DAXKIT.teams</code>, <code class="inline">PMM</code>.</p>
+    <p><strong>FHIR:</strong> <code class="inline">Media.type</code> + DSP <code class="inline">recording-source</code> extension (valueCode, bound to DSP CodeSystem). Normative rule <a href="/dsp-fhir/ig#normative-rules">R2</a> binds content access to a SMART-scoped <code class="inline">Binary</code> endpoint.</p>
+  </div>
+
+  <h2>10. Encounter <code class="inline">accompanied_by</code></h2>
+  <div class="card">
+    <p><strong>DSP:</strong> Free-form name + relationship string ("Jane Doe", "Spouse").</p>
+    <p><strong>FHIR:</strong> <code class="inline">RelatedPerson</code> referenced from <code class="inline">Encounter.participant</code> with <code class="inline">type</code> = SNOMED <code class="inline">303071001</code> (accompanying). Resolution via <a href="/dsp-fhir/operations#related-person-match"><code class="inline">RelatedPerson/$match</code></a> (mirrors base <code class="inline">Patient/$match</code>). If the identity is not resolvable, keep as <code class="inline">participant.individual.display</code>.</p>
+  </div>
+
+  <hr class="soft" />
+
+  <h2>Open questions worth raising with the DSP team</h2>
+  <ul class="clean">
+    <li>Will <code class="inline">confidence_score</code> extend beyond orders to conditions / observations? (IG extension context should anticipate this.)</li>
+    <li>Is the <code class="inline">referral</code> order subtype schema public? (Currently 404s in the docs.)</li>
+    <li>Is there a planned <code class="inline">observation</code> (vitals) resource? FHIR <code class="inline">Observation</code> is ready; the IG should define a profile even if DSP hasn't shipped one yet.</li>
+    <li>Will DSP adopt <code class="inline">SubscriptionTopic</code> natively, or is the <code class="inline">external_callback_url</code> custom forever?</li>
+    <li>Will turn indices ever need to be stable across revisions (for a refreshed transcript), or are they payload-local?</li>
+  </ul>
+</Layout>

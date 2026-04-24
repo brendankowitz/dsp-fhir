@@ -1,0 +1,134 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Terminology appendix" active="terminology">
+  <section class="hero">
+    <h1>Terminology &amp; canonical URLs</h1>
+    <p class="sub">
+      Every CodeSystem, ValueSet, extension, and profile used in the DSP-FHIR IG. One page,
+      one copy-pasteable URL per row. The IG publishes these under
+      <code class="inline">https://dsp-fhir.org/...</code> as its canonical base.
+    </p>
+  </section>
+
+  <h2>External code systems (re-used, not invented)</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">Concept</th><th scope="col">System URI</th><th scope="col">Where used</th></tr></thead>
+      <tbody>
+        <tr><td>SNOMED CT</td><td><code class="inline">http://snomed.info/sct</code></td><td>Conditions, body sites, categories, routes.</td></tr>
+        <tr><td>LOINC</td><td><code class="inline">http://loinc.org</code></td><td>Lab orders, document/section types, transcript type.</td></tr>
+        <tr><td>RxNorm</td><td><code class="inline">http://www.nlm.nih.gov/research/umls/rxnorm</code></td><td>Medication codes.</td></tr>
+        <tr><td>CPT</td><td><code class="inline">http://www.ama-assn.org/go/cpt</code></td><td>Procedures.</td></tr>
+        <tr><td>ICD-10-CM</td><td><code class="inline">http://hl7.org/fhir/sid/icd-10-cm</code></td><td>US diagnosis coding (alternate to SNOMED on Condition).</td></tr>
+        <tr><td>DICOM Controlled Terminology</td><td><code class="inline">http://dicom.nema.org/resources/ontology/DCM</code></td><td>Imaging modality (<code class="inline">imaging-modality</code>).</td></tr>
+        <tr><td>UCUM</td><td><code class="inline">http://unitsofmeasure.org</code></td><td>Dose, duration, and other quantity units.</td></tr>
+        <tr><td>US NPI</td><td><code class="inline">http://hl7.org/fhir/sid/us-npi</code></td><td>Practitioner identifier.</td></tr>
+        <tr><td>HL7 v3 ActCode</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/v3-ActCode</code></td><td><code class="inline">Encounter.class</code> (AMB, IMP, EMER, …).</td></tr>
+        <tr><td>FHIR request-intent</td><td><code class="inline">http://hl7.org/fhir/request-intent</code></td><td>order / plan / proposal / reflex-order.</td></tr>
+        <tr><td>FHIR request-status</td><td><code class="inline">http://hl7.org/fhir/request-status</code></td><td>active / completed / cancelled / …</td></tr>
+        <tr><td>FHIR condition-ver-status</td><td><code class="inline">http://terminology.hl7.org/CodeSystem/condition-ver-status</code></td><td>confirmed / unconfirmed / differential / refuted / …</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>DSP-FHIR CodeSystems (minted by the IG)</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">CodeSystem</th><th scope="col">Canonical URL</th><th scope="col">Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>DSP doc-category</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/doc-category</code></td><td>Values: <code class="inline">note</code>, <code class="inline">transcript</code>, <code class="inline">recording</code>, <code class="inline">referral-letter</code>.</td></tr>
+        <tr><td>DSP order-category</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/order-category</code></td><td>Values: <code class="inline">follow-up</code> — for the non-SNOMED follow-up category.</td></tr>
+        <tr><td>DSP speaker-role</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/speaker-role</code></td><td>Values: <code class="inline">provider</code>, <code class="inline">patient</code>, <code class="inline">other</code>, <code class="inline">unknown</code>.</td></tr>
+        <tr><td>DSP update-status</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/update-status</code></td><td>Mirrors DSP's <code class="inline">NEW / UPDATED / DELETED</code>; preferred model is <code class="inline">meta.versionId</code> + Provenance.</td></tr>
+        <tr><td>DSP payload-quality</td><td><code class="inline">https://dsp-fhir.org/CodeSystem/payload-quality</code></td><td>Values: <code class="inline">draft</code>, <code class="inline">preview</code>, <code class="inline">release</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>DSP-FHIR ValueSets</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">ValueSet</th><th scope="col">Canonical URL</th><th scope="col">Binding</th></tr></thead>
+      <tbody>
+        <tr><td>DSP condition codes</td><td><code class="inline">https://dsp-fhir.org/ValueSet/condition-codes</code></td><td>SNOMED CT + ICD-10-CM, extensible.</td></tr>
+        <tr><td>DSP medication codes</td><td><code class="inline">https://dsp-fhir.org/ValueSet/medication-codes</code></td><td>RxNorm SCD/SBD, extensible.</td></tr>
+        <tr><td>DSP lab codes</td><td><code class="inline">https://dsp-fhir.org/ValueSet/lab-codes</code></td><td>LOINC orderables, extensible.</td></tr>
+        <tr><td>DSP imaging modality</td><td><code class="inline">https://dsp-fhir.org/ValueSet/imaging-modality</code></td><td>DCM modality codes, required.</td></tr>
+        <tr><td>DSP imaging contrast</td><td><code class="inline">https://dsp-fhir.org/ValueSet/imaging-contrast</code></td><td><code class="inline">with</code> / <code class="inline">without</code> / <code class="inline">with-and-without</code>, required.</td></tr>
+        <tr><td>DSP laterality</td><td><code class="inline">https://dsp-fhir.org/ValueSet/laterality</code></td><td><code class="inline">left</code> / <code class="inline">right</code> / <code class="inline">bilateral</code>, required.</td></tr>
+        <tr><td>DSP procedure codes</td><td><code class="inline">https://dsp-fhir.org/ValueSet/procedure-codes</code></td><td>CPT + SNOMED procedures, extensible.</td></tr>
+        <tr><td>DSP specialty</td><td><code class="inline">https://dsp-fhir.org/ValueSet/specialty</code></td><td>SNOMED specialty codes, extensible (referral subtype).</td></tr>
+        <tr><td>DSP duration unit</td><td><code class="inline">https://dsp-fhir.org/ValueSet/duration-unit</code></td><td>UCUM subset: min / h / d / wk / mo / a, required.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>DSP-FHIR extensions</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">Extension</th><th scope="col">Canonical URL</th><th scope="col">Shape</th><th scope="col">Applies to</th></tr></thead>
+      <tbody>
+        <tr><td>payload-version</td><td><code class="inline">.../StructureDefinition/payload-version</code></td><td>complex (major/minor/revision/quality)</td><td>Encounter, Bundle.meta</td></tr>
+        <tr><td>external-callback-url</td><td><code class="inline">.../StructureDefinition/external-callback-url</code></td><td><code class="inline">valueUrl</code></td><td>Encounter</td></tr>
+        <tr><td>update-status</td><td><code class="inline">.../StructureDefinition/update-status</code></td><td><code class="inline">valueCode</code></td><td>Any resource (optional; prefer Provenance)</td></tr>
+        <tr><td>spoken-forms</td><td><code class="inline">.../StructureDefinition/spoken-forms</code></td><td>complex (repeating <code class="inline">form</code> valueString)</td><td>Condition, Composition.section, orders</td></tr>
+        <tr><td>transcript-turn-refs</td><td><code class="inline">.../StructureDefinition/transcript-turn-refs</code></td><td>complex (repeating <code class="inline">turn</code> valueInteger)</td><td>Any clinical resource</td></tr>
+        <tr><td>speaker-count</td><td><code class="inline">.../StructureDefinition/speaker-count</code></td><td><code class="inline">valuePositiveInt</code></td><td>DocumentReference (transcript)</td></tr>
+        <tr><td>confidence-score</td><td><code class="inline">.../StructureDefinition/confidence-score</code></td><td><code class="inline">valueDecimal</code> (0–1)</td><td>MedicationRequest, ServiceRequest (orders only in DSP 1.0)</td></tr>
+        <tr><td>legacy-id</td><td><code class="inline">.../StructureDefinition/legacy-id</code></td><td><code class="inline">valueString</code></td><td>Composition.section (DSP <code class="inline">legacy_id</code>)</td></tr>
+        <tr><td>rendered-dosage-instruction</td><td><code class="inline">.../StructureDefinition/rendered-dosage-instruction</code></td><td><code class="inline">valueString</code></td><td>MedicationRequest (back-port of R5 element)</td></tr>
+        <tr><td>abbreviation</td><td><code class="inline">.../StructureDefinition/abbreviation</code></td><td><code class="inline">valueString</code></td><td>ServiceRequest (lab)</td></tr>
+        <tr><td>bodysite-laterality</td><td><code class="inline">.../StructureDefinition/bodysite-laterality</code></td><td><code class="inline">valueCode</code> (bound to laterality VS)</td><td>ServiceRequest.bodySite</td></tr>
+        <tr><td>imaging-modality</td><td><code class="inline">.../StructureDefinition/imaging-modality</code></td><td><code class="inline">valueCoding</code> (bound to DCM)</td><td>ServiceRequest (imaging)</td></tr>
+        <tr><td>imaging-views</td><td><code class="inline">.../StructureDefinition/imaging-views</code></td><td><code class="inline">valueString</code></td><td>ServiceRequest (imaging)</td></tr>
+        <tr><td>imaging-contrast</td><td><code class="inline">.../StructureDefinition/imaging-contrast</code></td><td><code class="inline">valueCode</code> (contrast VS)</td><td>ServiceRequest (imaging)</td></tr>
+        <tr><td>procedure-devices</td><td><code class="inline">.../StructureDefinition/procedure-devices</code></td><td>complex (repeating <code class="inline">device</code> valueString)</td><td>ServiceRequest (procedure)</td></tr>
+        <tr><td>return-in</td><td><code class="inline">.../StructureDefinition/return-in</code></td><td><code class="inline">valueDuration</code></td><td>ServiceRequest (follow-up) — alt to <code class="inline">occurrenceTiming.boundsDuration</code></td></tr>
+        <tr><td>approximation</td><td><code class="inline">.../StructureDefinition/approximation</code></td><td><code class="inline">valueBoolean</code></td><td>Duration (nested on boundsDuration)</td></tr>
+        <tr><td>prn</td><td><code class="inline">.../StructureDefinition/prn</code></td><td><code class="inline">valueBoolean</code></td><td>ServiceRequest (follow-up)</td></tr>
+        <tr><td>tenant-organization</td><td><code class="inline">.../StructureDefinition/tenant-organization</code></td><td><code class="inline">valueReference(Organization)</code></td><td>Encounter (for DSP <code class="inline">organization_id</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>DSP-FHIR profiles</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">Profile</th><th scope="col">Canonical URL</th><th scope="col">Base</th></tr></thead>
+      <tbody>
+        <tr><td>DspEncounter</td><td><code class="inline">.../StructureDefinition/DspEncounter</code></td><td>Encounter</td></tr>
+        <tr><td>DspPatient</td><td><code class="inline">.../StructureDefinition/DspPatient</code></td><td>US Core Patient (where applicable) / Patient</td></tr>
+        <tr><td>DspPractitioner</td><td><code class="inline">.../StructureDefinition/DspPractitioner</code></td><td>US Core Practitioner / Practitioner</td></tr>
+        <tr><td>DspCondition</td><td><code class="inline">.../StructureDefinition/DspCondition</code></td><td>Condition</td></tr>
+        <tr><td>DspMedicationRequest</td><td><code class="inline">.../StructureDefinition/DspMedicationRequest</code></td><td>MedicationRequest</td></tr>
+        <tr><td>DspLabOrder</td><td><code class="inline">.../StructureDefinition/DspLabOrder</code></td><td>ServiceRequest</td></tr>
+        <tr><td>DspImagingOrder</td><td><code class="inline">.../StructureDefinition/DspImagingOrder</code></td><td>ServiceRequest</td></tr>
+        <tr><td>DspProcedureOrder</td><td><code class="inline">.../StructureDefinition/DspProcedureOrder</code></td><td>ServiceRequest</td></tr>
+        <tr><td>DspReferralOrder</td><td><code class="inline">.../StructureDefinition/DspReferralOrder</code></td><td>ServiceRequest</td></tr>
+        <tr><td>DspFollowUpOrder</td><td><code class="inline">.../StructureDefinition/DspFollowUpOrder</code></td><td>ServiceRequest</td></tr>
+        <tr><td>DspComposition</td><td><code class="inline">.../StructureDefinition/DspComposition</code></td><td>Composition</td></tr>
+        <tr><td>DspTranscript</td><td><code class="inline">.../StructureDefinition/DspTranscript</code></td><td>DocumentReference</td></tr>
+        <tr><td>DspRecording</td><td><code class="inline">.../StructureDefinition/DspRecording</code></td><td>DocumentReference</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Operations</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">Operation</th><th scope="col">URL</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">$graphql</code></td><td><code class="inline">[fhir-base]/$graphql</code></td><td>System-level, read; canonical DSP query published by the IG.</td></tr>
+        <tr><td><code class="inline">$everything</code> (Encounter)</td><td><code class="inline">[fhir-base]/Encounter/{'{id}'}/$everything</code></td><td>Optional; coarse fallback where GraphQL isn't available.</td></tr>
+        <tr><td>SubscriptionTopic</td><td><code class="inline">.../SubscriptionTopic/dsp-encounter-ready</code></td><td>Push delivery trigger (R4B/R5 backport via IG).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    The <code class="inline">https://dsp-fhir.org</code> base is illustrative. A real publication
+    would mint these under an HL7-managed or vendor-owned canonical that commits to long-term
+    resolution.
+  </div>
+</Layout>

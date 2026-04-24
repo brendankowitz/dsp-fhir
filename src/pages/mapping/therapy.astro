@@ -1,0 +1,89 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Therapy order" active="mapping">
+  <MapHeader
+    title="Therapy order"
+    dspType="order.therapy"
+    fhirResource="ServiceRequest (category=therapy)"
+    summary="DSP therapy orders cover PT, OT, ST, cardiac/pulmonary rehab, and respiratory therapy. These are procedural referrals, not continuous interventions — ServiceRequest (category=therapy) is the right fit. Realization as delivered care (encounters, procedures) happens downstream."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: THERAPY_ORDER</code></td><td><code class="inline">ServiceRequest.category = therapy</code></td><td>Use IG CodeSystem <code class="inline">order-category</code> code <code class="inline">therapy</code>, or SNOMED <code class="inline">277132007</code> (therapeutic procedure).</td></tr>
+        <tr><td><code class="inline">order_data.therapy_type</code></td><td><code class="inline">code</code></td><td>SNOMED: <code class="inline">91251008</code> physical therapy, <code class="inline">5880005</code> physical exam? no — OT: <code class="inline">310483005</code>, ST: <code class="inline">708176008</code>.</td></tr>
+        <tr><td><code class="inline">order_data.frequency</code> / <code class="inline">sessions_per_week</code></td><td><code class="inline">occurrenceTiming.repeat.frequency</code> / <code class="inline">period</code> / <code class="inline">periodUnit</code></td><td>"3×/wk for 6 weeks" → frequency=3, period=1, periodUnit=wk, boundsDuration=6wk.</td></tr>
+        <tr><td><code class="inline">order_data.duration</code></td><td><code class="inline">occurrenceTiming.repeat.boundsDuration</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.focus</code> / goals</td><td><code class="inline">orderDetail</code> + link to <code class="inline">Goal</code> via <code class="inline">Goal.addresses</code></td><td>Therapy goals (strength, ROM, gait) belong on <code class="inline">Goal</code> resources for progress tracking. DSP can emit them as child resources.</td></tr>
+        <tr><td><code class="inline">order_data.body_site</code></td><td><code class="inline">bodySite</code></td><td>SNOMED.</td></tr>
+        <tr><td><code class="inline">order_data.performer_specialty</code></td><td><code class="inline">performerType</code></td><td>e.g. "physical therapist" (SNOMED <code class="inline">36682004</code>).</td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "therapy-001",
+  "type": "THERAPY_ORDER",
+  "context": { "content_type": "order.therapy" },
+  "description": "Physical therapy, right knee, 3x/week for 6 weeks, focus on strength and ROM post-ACL repair",
+  "intent": "order",
+  "reason": "Status post right ACL reconstruction; deconditioning",
+  "reason_references": ["cond-006"],
+  "provenance": [58, 60, 62],
+  "order_data": {
+    "therapy_type": "91251008",
+    "therapy_type_system": "SNOMED",
+    "body_site": "6757004",
+    "frequency_per_week": 3,
+    "duration": { "value": 6, "unit": "week" },
+    "focus": ["strength","range_of_motion"],
+    "performer_specialty": "physical_therapist"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[{"coding":[{"system":"https://dsp-fhir.org/CodeSystem/order-category","code":"therapy"}]}],
+  "code":{"coding":[{"system":"http://snomed.info/sct","code":"91251008","display":"Physical therapy procedure"}]},
+  "bodySite":[{"coding":[{"system":"http://snomed.info/sct","code":"6757004","display":"Right knee"}]}],
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "occurrenceTiming":{
+    "repeat":{
+      "frequency":3,"period":1,"periodUnit":"wk",
+      "boundsDuration":{"value":6,"unit":"wk","system":"http://unitsofmeasure.org","code":"wk"}
+    }
+  },
+  "performerType":{"coding":[{"system":"http://snomed.info/sct","code":"36682004","display":"Physical therapist"}]},
+  "orderDetail":[
+    {"coding":[{"system":"https://dsp-fhir.org/CodeSystem/therapy-focus","code":"strength"}]},
+    {"coding":[{"system":"https://dsp-fhir.org/CodeSystem/therapy-focus","code":"range-of-motion"}]}
+  ],
+  "reasonCode":[{"text":"Status post right ACL reconstruction; deconditioning"}],
+  "reasonReference":[{"reference":"Condition/cond-006"}]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Orthogonal resources.</strong> If the payload carries therapy goals, emit
+    them as <code class="inline">Goal</code> resources with <code class="inline">Goal.addresses</code>
+    pointing at the underlying <code class="inline">Condition</code> and
+    <code class="inline">Goal.outcomeReference</code> / <code class="inline">outcomeCode</code>
+    for measurable targets. The therapy <code class="inline">ServiceRequest</code> then
+    links back via <code class="inline">supportingInfo</code>.
+  </div>
+</Layout>

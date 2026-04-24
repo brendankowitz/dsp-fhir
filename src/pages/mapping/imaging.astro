@@ -1,0 +1,78 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Imaging order" active="mapping">
+  <MapHeader
+    title="Imaging order"
+    dspType="order.imaging"
+    fhirResource="ServiceRequest (category=imaging)"
+    summary="Imaging orders live on ServiceRequest with category=imaging. DSP's free-string modality/laterality/views need structured bindings via extensions for cross-system comparability."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: IMAGING_ORDER</code></td><td><code class="inline">ServiceRequest.category = imaging</code></td><td><code class="inline">http://snomed.info/sct|363679005</code>.</td></tr>
+        <tr><td><code class="inline">description</code></td><td><code class="inline">ServiceRequest.code.text</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.imaging_modality</code> (string "X-ray" / "MRI" / "CT")</td><td>Extension <code class="inline">imaging-modality</code> (coded)</td><td>Bind to <a href="http://dicom.nema.org/resources/ontology/DCM">DCM</a> (<code class="inline">http://dicom.nema.org/resources/ontology/DCM</code>) — the DICOM controlled terminology FHIR code system.</td></tr>
+        <tr><td><code class="inline">order_data.imaging_body_location</code></td><td><code class="inline">ServiceRequest.bodySite</code></td><td>Prefer SNOMED body structure codes.</td></tr>
+        <tr><td><code class="inline">order_data.imaging_location_laterality</code></td><td>Extension <code class="inline">bodysite-laterality</code> on bodySite</td><td>right/left/bilateral (SNOMED).</td></tr>
+        <tr><td><code class="inline">order_data.views</code></td><td>Extension <code class="inline">imaging-views</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.contrast</code></td><td>Extension <code class="inline">imaging-contrast</code></td><td>with / without / with-and-without.</td></tr>
+        <tr><td><code class="inline">order_data.imaging_instructions</code></td><td><code class="inline">ServiceRequest.note.text</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.patient_instructions</code></td><td><code class="inline">ServiceRequest.patientInstruction</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "f7d8e9a0b1c2d3e4f5g6h7i8j9k0l1m2",
+  "type": "IMAGING_ORDER",
+  "context": { "content_type": "order.imaging" },
+  "description": "Chest X-ray to evaluate shortness of breath",
+  "intent": "order",
+  "order_data": {
+    "imaging_modality": "X-ray",
+    "imaging_body_location": "chest",
+    "imaging_location_laterality": "bilateral",
+    "views": "2 view",
+    "contrast": "without contrast",
+    "imaging_instructions": "Standard PA and lateral views",
+    "patient_instructions": "No preparation required."
+  },
+  "confidence_score": 1.0
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[{"coding":[{"system":"http://snomed.info/sct","code":"363679005","display":"Imaging"}]}],
+  "code":{"text":"Chest X-ray 2 view without contrast"},
+  "bodySite":[{
+    "coding":[{"system":"http://snomed.info/sct","code":"51185008","display":"Thoracic structure"}],
+    "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/bodysite-laterality","valueCode":"bilateral"}]
+  }],
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "patientInstruction":"No preparation required.",
+  "note":[{"text":"Standard PA and lateral views"}],
+  "extension":[
+    {"url":"https://dsp-fhir.org/StructureDefinition/imaging-modality",
+     "valueCoding":{"system":"http://dicom.nema.org/resources/ontology/DCM","code":"CR","display":"Computed Radiography"}},
+    {"url":"https://dsp-fhir.org/StructureDefinition/imaging-views","valueString":"2 view"},
+    {"url":"https://dsp-fhir.org/StructureDefinition/imaging-contrast","valueCode":"without"},
+    {"url":"https://dsp-fhir.org/StructureDefinition/confidence-score","valueDecimal":1.0}
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+</Layout>

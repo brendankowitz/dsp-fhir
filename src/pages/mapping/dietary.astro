@@ -1,0 +1,99 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Dietary order" active="mapping">
+  <MapHeader
+    title="Dietary order"
+    dspType="order.dietary"
+    fhirResource="NutritionOrder"
+    summary="DSP dietary orders capture diet type, texture, fluid restrictions, supplements, and feeding routes. FHIR has a purpose-built resource — NutritionOrder — that maps almost one-to-one. Unlike the other DSP orders (which are all ServiceRequest flavours), dietary gets its own resource."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: DIETARY_ORDER</code></td><td><code class="inline">NutritionOrder</code></td><td>The resource type itself is the category — no <code class="inline">category</code> mapping required.</td></tr>
+        <tr><td><code class="inline">intent</code></td><td><code class="inline">NutritionOrder.intent</code></td><td>R4 <code class="inline">NutritionOrder.intent</code> uses the same <code class="inline">request-intent</code> value set as the other request resources.</td></tr>
+        <tr><td><code class="inline">order_data.diet_type</code></td><td><code class="inline">oralDiet.type</code></td><td>CodeableConcept — bind to SNOMED diet types (e.g. <code class="inline">182922004</code> diabetic diet, <code class="inline">435801000124108</code> low-sodium).</td></tr>
+        <tr><td><code class="inline">order_data.texture</code></td><td><code class="inline">oralDiet.texture.modifier</code></td><td>SNOMED texture codes (pureed, mechanical soft, etc.).</td></tr>
+        <tr><td><code class="inline">order_data.fluid_consistency</code></td><td><code class="inline">oralDiet.fluidConsistencyType</code></td><td>Thickened liquids, nectar-thick, etc.</td></tr>
+        <tr><td><code class="inline">order_data.supplements</code></td><td><code class="inline">supplement[]</code></td><td><code class="inline">supplement.type</code> + <code class="inline">productName</code> + <code class="inline">quantity</code> + <code class="inline">schedule</code>.</td></tr>
+        <tr><td><code class="inline">order_data.enteral_formula</code></td><td><code class="inline">enteralFormula</code></td><td>For tube-feeding orders.</td></tr>
+        <tr><td><code class="inline">order_data.food_preferences</code></td><td><code class="inline">oralDiet.instruction</code> + <code class="inline">foodPreferenceModifier</code></td><td>Patient-stated preferences (Patient-level) vs clinical modifiers (order-level) — keep them distinct.</td></tr>
+        <tr><td><code class="inline">order_data.exclusions</code> / allergies</td><td><code class="inline">excludeFoodModifier</code> + AllergyIntolerance ref</td><td>Allergen-driven exclusions should also surface as an <code class="inline">AllergyIntolerance</code> resource.</td></tr>
+        <tr><td><code class="inline">order_data.schedule</code></td><td><code class="inline">oralDiet.schedule</code> (R4: Timing)</td><td>NPO periods, with-meals, etc.</td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td>Renamed to <code class="inline">reason</code> in R5 — prefer R4 until xver needed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "diet-001",
+  "type": "DIETARY_ORDER",
+  "context": { "content_type": "order.dietary" },
+  "description": "Diabetic diet, low sodium, thickened liquids (nectar)",
+  "intent": "order",
+  "reason": "Type 2 diabetes; dysphagia post-stroke",
+  "reason_references": ["cond-002","cond-003"],
+  "provenance": [42, 44],
+  "order_data": {
+    "diet_type": "diabetic_low_sodium",
+    "fluid_consistency": "nectar_thick",
+    "exclusions": ["added_sugar","high_sodium"],
+    "schedule": "with_meals"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"NutritionOrder",
+  "status":"active","intent":"order",
+  "patient":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "dateTime":"2026-04-23T14:32:00Z",
+  "oralDiet":{
+    "type":[
+      { "coding":[{"system":"http://snomed.info/sct","code":"182922004","display":"Diabetic diet"}]},
+      { "coding":[{"system":"http://snomed.info/sct","code":"386619000","display":"Low sodium diet"}]}
+    ],
+    "fluidConsistencyType":[
+      {"coding":[{"system":"http://snomed.info/sct","code":"439021000124105","display":"Nectar-thick liquid"}]}
+    ],
+    "excludeFoodModifier":[
+      {"coding":[{"system":"http://snomed.info/sct","code":"226355009","display":"Added sugar"}]}
+    ]
+  },
+  "reasonCode":[{"text":"Type 2 diabetes; dysphagia post-stroke"}],
+  "reasonReference":[
+    {"reference":"Condition/cond-002"},
+    {"reference":"Condition/cond-003"}
+  ],
+  "extension":[
+    { "url":"https://dsp-fhir.org/StructureDefinition/transcript-turn-refs",
+      "extension":[
+        { "url":"transcript","valueReference":{"reference":"DocumentReference/dr-transcript-001"}},
+        { "url":"turn","valueInteger":42 },
+        { "url":"turn","valueInteger":44 }
+      ]
+    }
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout ok">
+    <strong>Best-fit DSP order.</strong> <code class="inline">NutritionOrder</code> is a
+    one-to-one structural match — no <code class="inline">ServiceRequest</code> profiling,
+    no fabricated extensions for the order shape itself. The only DSP-specific additions
+    are the usual cross-cutting extensions (<code class="inline">confidence-score</code>,
+    <code class="inline">transcript-turn-refs</code>, <code class="inline">spoken-forms</code>).
+  </div>
+</Layout>

@@ -1,0 +1,118 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Activity order" active="mapping">
+  <MapHeader
+    title="Activity order"
+    dspType="order.activity"
+    fhirResource="CarePlan.activity (primary) or ServiceRequest (category=activity)"
+    summary="DSP activity orders cover ambulation, mobility, exercise, activity restrictions (weight-bearing limits, no driving). These are plan-like items more than one-shot procedures. Prefer CarePlan.activity — a ServiceRequest is acceptable when the activity is literally a single scheduled event."
+  />
+
+  <h2>Routing rule</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>DSP shape</th><th>FHIR target</th></tr></thead>
+      <tbody>
+        <tr><td>Ongoing activity (ambulate 3×/day, no lifting &gt;10 lb)</td><td><code class="inline">CarePlan</code> with <code class="inline">activity.detail</code></td></tr>
+        <tr><td>Single-event activity (fitness test at next visit)</td><td><code class="inline">ServiceRequest</code> (<code class="inline">category=activity</code>)</td></tr>
+        <tr><td>Activity restriction (driving, work, sport)</td><td><code class="inline">CarePlan.activity.detail</code> with <code class="inline">prohibited=true</code> + <code class="inline">Condition</code> linkage for the underlying reason</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Field-by-field (CarePlan.activity primary path)</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: ACTIVITY_ORDER</code></td><td><code class="inline">CarePlan.activity</code></td><td>Each DSP activity order becomes one <code class="inline">activity</code> entry on the encounter-scoped <code class="inline">CarePlan</code>.</td></tr>
+        <tr><td><code class="inline">order_data.activity_code</code></td><td><code class="inline">activity.detail.code</code></td><td>SNOMED: <code class="inline">52990006</code> ambulation, <code class="inline">103755000</code> exercise, etc.</td></tr>
+        <tr><td><code class="inline">order_data.prohibited</code></td><td><code class="inline">activity.detail.prohibited</code> (boolean)</td><td>"No driving" → prohibited=true + code=driving.</td></tr>
+        <tr><td><code class="inline">order_data.frequency</code></td><td><code class="inline">activity.detail.scheduledTiming</code></td><td>Same Timing structure as Therapy.</td></tr>
+        <tr><td><code class="inline">order_data.quantity</code> / <code class="inline">duration</code></td><td><code class="inline">activity.detail.quantity</code> + <code class="inline">scheduledTiming.repeat.duration</code></td><td>"Walk 10 min" → quantity=10 min.</td></tr>
+        <tr><td><code class="inline">order_data.restriction_limit</code></td><td><code class="inline">activity.detail.description</code> + extension</td><td>"No lifting &gt;10 lb" — R4 has no structured lift-limit slot; narrative + DSP-FHIR <code class="inline">weight-limit</code> extension.</td></tr>
+        <tr><td><code class="inline">reason_references</code></td><td><code class="inline">activity.detail.reasonReference</code> and/or <code class="inline">CarePlan.addresses</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "act-001",
+  "type": "ACTIVITY_ORDER",
+  "context": { "content_type": "order.activity" },
+  "description": "No lifting greater than 10 pounds for 6 weeks; walk 20 minutes twice daily",
+  "intent": "order",
+  "reason": "Post-op lumbar discectomy recovery",
+  "reason_references": ["cond-007"],
+  "provenance": [88, 90],
+  "order_data": {
+    "items": [
+      {
+        "activity_code": "129006008",
+        "activity_code_system": "SNOMED",
+        "prohibited": true,
+        "restriction_limit": { "value": 10, "unit": "[lb_av]" },
+        "duration": { "value": 6, "unit": "week" }
+      },
+      {
+        "activity_code": "52990006",
+        "activity_code_system": "SNOMED",
+        "quantity": { "value": 20, "unit": "min" },
+        "frequency_per_day": 2
+      }
+    ]
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"CarePlan",
+  "status":"active","intent":"order",
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "addresses":[{"reference":"Condition/cond-007"}],
+  "activity":[
+    {
+      "detail":{
+        "kind":"ServiceRequest",
+        "code":{"coding":[{"system":"http://snomed.info/sct","code":"129006008","display":"Lifting"}]},
+        "status":"not-started",
+        "prohibited":true,
+        "description":"No lifting >10 lb for 6 weeks",
+        "scheduledTiming":{"repeat":{"boundsDuration":{"value":6,"unit":"wk","system":"http://unitsofmeasure.org","code":"wk"}}},
+        "extension":[
+          { "url":"https://dsp-fhir.org/StructureDefinition/weight-limit",
+            "valueQuantity":{"value":10,"unit":"lb","system":"http://unitsofmeasure.org","code":"[lb_av]"}}
+        ]
+      }
+    },
+    {
+      "detail":{
+        "kind":"ServiceRequest",
+        "code":{"coding":[{"system":"http://snomed.info/sct","code":"52990006","display":"Ambulation"}]},
+        "status":"not-started",
+        "quantity":{"value":20,"unit":"min","system":"http://unitsofmeasure.org","code":"min"},
+        "scheduledTiming":{"repeat":{"frequency":2,"period":1,"periodUnit":"d"}}
+      }
+    }
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>The one DSP type that collapses onto FHIR awkwardly.</strong>
+    <code class="inline">CarePlan.activity.detail</code> is a compact sub-record, not a
+    full request resource, so it lacks the confidence/provenance extension-context you
+    get on first-class resources. If per-activity confidence or turn-refs matter to a
+    consumer, emit each activity as a standalone <code class="inline">ServiceRequest</code>
+    (category=activity) and reference it from <code class="inline">CarePlan.activity.reference</code>.
+  </div>
+</Layout>

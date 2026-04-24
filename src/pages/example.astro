@@ -1,0 +1,372 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Worked example — DSP ⇄ FHIR" active="example">
+  <section class="hero">
+    <h1>End-to-end worked example</h1>
+    <p class="sub">
+      A single ambulatory visit, followed from a DSP payload through a FHIR R4 transaction
+      Bundle, and back out as a <code class="inline">$graphql</code> projection. This is the
+      round-trip the IG is designed to make boring.
+    </p>
+  </section>
+
+  <h2>1. Scenario</h2>
+  <div class="card">
+    <p>
+      25-year-old male, productive cough for 5 days, fever to 101°F. Clinician dictates a
+      progress note; Dragon produces an ambient scribe document plus discrete orders:
+    </p>
+    <ul class="clean">
+      <li>Problem: Acute bronchitis (new, confirmed)</li>
+      <li>Medication: Azithromycin 250 mg, 1 tab PO daily × 5 days</li>
+      <li>Lab: CBC with differential</li>
+      <li>Imaging: Chest X-ray, 2 view, without contrast</li>
+      <li>Follow-up: Return in ~2 weeks PRN</li>
+      <li>Progress note with HPI + A&amp;P sections + transcript</li>
+    </ul>
+  </div>
+
+  <h2>2. DSP payload (abridged)</h2>
+<pre><code>{`{
+  "payload_version": { "major": 1, "minor": 0, "revision": 0, "quality": "release" },
+  "external_callback_url": "https://partner.example.com/dsp/callback",
+  "encounter": {
+    "id": "enc-12345",
+    "patient": { "id": "pat-67890", "given_name": "Alex", "family_name": "Rivera",
+                 "gender": "male", "birth_date": "2000-03-14" },
+    "providers": [{ "id": "pract-001", "given_name": "Sam", "family_name": "Lee",
+                    "qualification": "MD", "npi": "1234567890" }],
+    "period": { "start": "2026-04-23T14:00:00Z", "end": "2026-04-23T14:30:00Z" },
+    "class": "ambulatory"
+  },
+  "resources": [
+    { "id": "cond-001", "type": "CONDITION",
+      "context": { "content_type": "condition", "spoken_forms": ["bronchitis"] },
+      "description": "Acute bronchitis",
+      "codes": [{ "system": "snomed", "code": "10509002" }],
+      "status": "active", "verification_status": "confirmed",
+      "onset_datetime": "2026-04-18" },
+
+    { "id": "med-001", "type": "MEDICATION_ORDER",
+      "context": { "content_type": "order.medication" },
+      "description": "Azithromycin 250 mg PO daily x 5 days",
+      "intent": "order", "status": "active",
+      "order_data": {
+        "medication": { "text": "azithromycin 250 MG oral tablet",
+                        "codes": [{"system":"RxNorm","code":"308460"}] },
+        "dose_quantity": { "value": 250, "unit": "mg" },
+        "route": "oral", "frequency": "daily", "duration": { "value": 5, "unit": "day" },
+        "rendered_dosage_instruction": "Take 1 tablet by mouth once daily for 5 days",
+        "reason_references": ["cond-001"]
+      },
+      "confidence_score": 0.94 },
+
+    { "id": "lab-001", "type": "LAB_ORDER",
+      "context": { "content_type": "order.laboratory" },
+      "description": "CBC with differential",
+      "intent": "order",
+      "order_data": {
+        "lab": { "text": "CBC with differential",
+                 "codes": [{"system":"LOINC","code":"57021-8"}] },
+        "lab_abbreviation": "CBC", "sample_type": "blood"
+      },
+      "confidence_score": 1.0 },
+
+    { "id": "img-001", "type": "IMAGING_ORDER",
+      "context": { "content_type": "order.imaging" },
+      "description": "Chest X-ray, 2 view, without contrast",
+      "intent": "order",
+      "order_data": {
+        "imaging_modality": "X-ray", "imaging_body_location": "chest",
+        "views": "2 view", "contrast": "without contrast"
+      },
+      "confidence_score": 1.0 },
+
+    { "id": "fu-001", "type": "FOLLOW_UP_ORDER",
+      "context": { "content_type": "order.follow_up" },
+      "description": "Return in ~2 weeks PRN",
+      "intent": "order",
+      "order_data": { "return_in_value": "2", "return_in_unit": "week",
+                      "approximation": true, "prn": true } },
+
+    { "legacy_id": "hpi_1",
+      "context": { "content_type": "document_section",
+                   "display_description": "HISTORY OF PRESENT ILLNESS",
+                   "codes": [{"system":"loinc.org","identifier":"10164-2"}],
+                   "spoken_forms": ["HPI"] },
+      "content": "25 y/o male, productive cough x 5 days, fever 101F..." },
+
+    { "legacy_id": "ap_1",
+      "context": { "content_type": "document_section",
+                   "display_description": "ASSESSMENT AND PLAN",
+                   "codes": [{"system":"loinc.org","identifier":"51847-2"}] },
+      "content": "Acute bronchitis. Azithromycin x5d. CBC + CXR. Return 2wk PRN." }
+  ],
+  "transcript": {
+    "speaker_count": 2,
+    "turns": [
+      { "index": 0, "speaker": "provider",
+        "start_time": "00:00:01.2", "end_time": "00:00:04.8",
+        "content": "What brings you in today?" },
+      { "index": 1, "speaker": "patient",
+        "start_time": "00:00:05.1", "end_time": "00:00:12.3",
+        "content": "I've had a bad cough for about five days..." }
+    ]
+  }
+}`}</code></pre>
+
+  <h2>3. FHIR R4 transaction Bundle (what the partner POSTs)</h2>
+  <p>
+    One atomic transaction. Server assigns ids; <code class="inline">urn:uuid:*</code>
+    placeholders resolve inside the Bundle. Conditional creates keep Patient/Practitioner
+    idempotent across re-submission.
+  </p>
+<pre><code>{`POST [fhir-base]  (type = transaction)
+{
+  "resourceType": "Bundle", "type": "transaction",
+  "meta": {
+    "extension": [{
+      "url": "https://dsp-fhir.org/StructureDefinition/payload-version",
+      "extension": [
+        { "url": "major",    "valueInteger": 1 },
+        { "url": "minor",    "valueInteger": 0 },
+        { "url": "revision", "valueInteger": 0 },
+        { "url": "quality",  "valueCode":    "release" }
+      ]
+    }]
+  },
+  "entry": [
+    { "fullUrl": "urn:uuid:pat",
+      "resource": { "resourceType": "Patient", "id": "pat-67890",
+        "identifier":[{"system":"urn:oid:..mrn","value":"pat-67890"}],
+        "name":[{"given":["Alex"],"family":"Rivera"}],
+        "gender":"male","birthDate":"2000-03-14" },
+      "request": { "method":"PUT",
+        "url":"Patient?identifier=urn:oid:..mrn|pat-67890" } },
+
+    { "fullUrl": "urn:uuid:pract",
+      "resource": { "resourceType":"Practitioner","id":"pract-001",
+        "identifier":[{"system":"http://hl7.org/fhir/sid/us-npi","value":"1234567890"}],
+        "name":[{"given":["Sam"],"family":"Lee"}],
+        "qualification":[{"code":{"text":"MD"}}] },
+      "request": { "method":"PUT",
+        "url":"Practitioner?identifier=http://hl7.org/fhir/sid/us-npi|1234567890" } },
+
+    { "fullUrl": "urn:uuid:enc",
+      "resource": { "resourceType":"Encounter","id":"enc-12345",
+        "status":"finished",
+        "class":{"system":"http://terminology.hl7.org/CodeSystem/v3-ActCode","code":"AMB"},
+        "subject":{"reference":"urn:uuid:pat"},
+        "participant":[{"individual":{"reference":"urn:uuid:pract"}}],
+        "period":{"start":"2026-04-23T14:00:00Z","end":"2026-04-23T14:30:00Z"},
+        "extension":[{
+          "url":"https://dsp-fhir.org/StructureDefinition/external-callback-url",
+          "valueUrl":"https://partner.example.com/dsp/callback"
+        }] },
+      "request": { "method":"PUT","url":"Encounter/enc-12345" } },
+
+    { "fullUrl": "urn:uuid:cond",
+      "resource": { "resourceType":"Condition","id":"cond-001",
+        "clinicalStatus":{"coding":[{"code":"active"}]},
+        "verificationStatus":{"coding":[{"code":"confirmed"}]},
+        "code":{"coding":[{"system":"http://snomed.info/sct","code":"10509002"}],
+                "text":"Acute bronchitis"},
+        "onsetDateTime":"2026-04-18",
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "extension":[{
+          "url":"https://dsp-fhir.org/StructureDefinition/spoken-forms",
+          "extension":[{"url":"form","valueString":"bronchitis"}]
+        }] },
+      "request": { "method":"PUT","url":"Condition/cond-001" } },
+
+    { "fullUrl": "urn:uuid:med",
+      "resource": { "resourceType":"MedicationRequest","id":"med-001",
+        "status":"active","intent":"order",
+        "medicationCodeableConcept":{
+          "coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"308460"}],
+          "text":"azithromycin 250 MG oral tablet"},
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "dosageInstruction":[{
+          "text":"Take 1 tablet by mouth once daily for 5 days",
+          "timing":{"repeat":{"frequency":1,"period":1,"periodUnit":"d","boundsDuration":{"value":5,"unit":"d"}}},
+          "route":{"coding":[{"system":"http://snomed.info/sct","code":"26643006","display":"Oral"}]},
+          "doseAndRate":[{"doseQuantity":{"value":250,"unit":"mg"}}]
+        }],
+        "reasonReference":[{"reference":"urn:uuid:cond"}],
+        "extension":[
+          {"url":"https://dsp-fhir.org/StructureDefinition/rendered-dosage-instruction",
+           "valueString":"Take 1 tablet by mouth once daily for 5 days"},
+          {"url":"https://dsp-fhir.org/StructureDefinition/confidence-score","valueDecimal":0.94}
+        ] },
+      "request": { "method":"PUT","url":"MedicationRequest/med-001" } },
+
+    { "fullUrl": "urn:uuid:lab",
+      "resource": { "resourceType":"ServiceRequest","id":"lab-001",
+        "status":"active","intent":"order",
+        "category":[{"coding":[{"system":"http://snomed.info/sct","code":"108252007"}]}],
+        "code":{"coding":[{"system":"http://loinc.org","code":"57021-8"}],"text":"CBC with differential"},
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "extension":[
+          {"url":"https://dsp-fhir.org/StructureDefinition/abbreviation","valueString":"CBC"},
+          {"url":"https://dsp-fhir.org/StructureDefinition/confidence-score","valueDecimal":1.0}
+        ] },
+      "request": { "method":"PUT","url":"ServiceRequest/lab-001" } },
+
+    { "fullUrl": "urn:uuid:img",
+      "resource": { "resourceType":"ServiceRequest","id":"img-001",
+        "status":"active","intent":"order",
+        "category":[{"coding":[{"system":"http://snomed.info/sct","code":"363679005"}]}],
+        "code":{"text":"Chest X-ray, 2 view, without contrast"},
+        "bodySite":[{"coding":[{"system":"http://snomed.info/sct","code":"51185008","display":"Thoracic structure"}]}],
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "extension":[
+          {"url":"https://dsp-fhir.org/StructureDefinition/imaging-modality",
+           "valueCoding":{"system":"http://dicom.nema.org/resources/ontology/DCM","code":"CR"}},
+          {"url":"https://dsp-fhir.org/StructureDefinition/imaging-views","valueString":"2 view"},
+          {"url":"https://dsp-fhir.org/StructureDefinition/imaging-contrast","valueCode":"without"}
+        ] },
+      "request": { "method":"PUT","url":"ServiceRequest/img-001" } },
+
+    { "fullUrl": "urn:uuid:fu",
+      "resource": { "resourceType":"ServiceRequest","id":"fu-001",
+        "status":"active","intent":"order",
+        "category":[{"coding":[{"system":"https://dsp-fhir.org/CodeSystem/order-category","code":"follow-up"}]}],
+        "code":{"text":"Return in ~2 weeks PRN"},
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "occurrenceTiming":{"repeat":{"boundsDuration":{
+          "value":2,"unit":"wk","system":"http://unitsofmeasure.org","code":"wk",
+          "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/approximation","valueBoolean":true}]
+        }}},
+        "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/prn","valueBoolean":true}] },
+      "request": { "method":"PUT","url":"ServiceRequest/fu-001" } },
+
+    { "fullUrl": "urn:uuid:transcript",
+      "resource": { "resourceType":"DocumentReference","id":"dr-transcript-001",
+        "status":"current",
+        "type":{"coding":[{"system":"http://loinc.org","code":"102479-6","display":"Conversation transcript"}]},
+        "category":[{"coding":[{"system":"https://dsp-fhir.org/CodeSystem/doc-category","code":"transcript"}]}],
+        "subject":{"reference":"urn:uuid:pat"},
+        "context":{"encounter":[{"reference":"urn:uuid:enc"}],
+                   "period":{"start":"2026-04-23T14:00:00Z","end":"2026-04-23T14:30:00Z"}},
+        "content":[{"attachment":{
+          "contentType":"application/json",
+          "url":"Binary/bin-transcript-001"
+        }}],
+        "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/speaker-count","valuePositiveInt":2}] },
+      "request": { "method":"PUT","url":"DocumentReference/dr-transcript-001" } },
+
+    { "fullUrl": "urn:uuid:comp",
+      "resource": { "resourceType":"Composition","id":"comp-001",
+        "status":"preliminary",
+        "type":{"coding":[{"system":"http://loinc.org","code":"11506-3","display":"Progress note"}]},
+        "subject":{"reference":"urn:uuid:pat"},
+        "encounter":{"reference":"urn:uuid:enc"},
+        "date":"2026-04-23T14:30:00Z",
+        "author":[{"reference":"urn:uuid:pract"}],
+        "title":"Progress Note",
+        "section":[
+          { "title":"HISTORY OF PRESENT ILLNESS",
+            "code":{"coding":[{"system":"http://loinc.org","code":"10164-2"}]},
+            "text":{"status":"generated","div":"<div xmlns=\\"http://www.w3.org/1999/xhtml\\">25 y/o male...</div>"},
+            "extension":[
+              {"url":"https://dsp-fhir.org/StructureDefinition/legacy-id","valueString":"hpi_1"},
+              {"url":"https://dsp-fhir.org/StructureDefinition/spoken-forms",
+               "extension":[{"url":"form","valueString":"HPI"}]}
+            ] },
+          { "title":"ASSESSMENT AND PLAN",
+            "code":{"coding":[{"system":"http://loinc.org","code":"51847-2"}]},
+            "text":{"status":"generated","div":"<div xmlns=\\"http://www.w3.org/1999/xhtml\\">Acute bronchitis...</div>"},
+            "entry":[
+              {"reference":"urn:uuid:cond"},
+              {"reference":"urn:uuid:med"},
+              {"reference":"urn:uuid:lab"},
+              {"reference":"urn:uuid:img"},
+              {"reference":"urn:uuid:fu"}
+            ],
+            "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/legacy-id","valueString":"ap_1"}] }
+        ] },
+      "request": { "method":"PUT","url":"Composition/comp-001" } }
+  ]
+}`}</code></pre>
+
+  <div class="callout">
+    The transcript turns themselves travel as a structured JSON attachment on the
+    transcript's <code class="inline">DocumentReference</code> (or a <code class="inline">Binary</code>),
+    not as inline FHIR elements. Each turn's integer offset is echoed onto the resource it
+    supported via the <code class="inline">transcript-turn-refs</code> extension so
+    grounding is preserved both directions.
+  </div>
+
+  <h2>4. Reading it back as DSP (one GraphQL call)</h2>
+  <p>
+    After the Bundle is accepted, a partner asks for the DSP view of the encounter with the
+    canonical query documented on the <a href="/dsp-fhir/graphql">$graphql page</a>. The server returns:
+  </p>
+<pre><code>{`POST [fhir-base]/$graphql
+Content-Type: application/json
+
+{ "query": "<DSP canonical query>", "variables": { "encId": "enc-12345" } }
+
+=>
+
+{
+  "data": {
+    "encounter": {
+      "id":"enc-12345","status":"finished",
+      "class":{"code":"AMB"},
+      "period":{"start":"2026-04-23T14:00:00Z","end":"2026-04-23T14:30:00Z"},
+      "subject":{"resource":{"id":"pat-67890","name":[{"given":["Alex"],"family":"Rivera"}],"gender":"male","birthDate":"2000-03-14"}},
+      "participant":[{"individual":{"resource":{"id":"pract-001","name":[{"given":["Sam"],"family":"Lee"}],"identifier":[{"system":"http://hl7.org/fhir/sid/us-npi","value":"1234567890"}]}}}],
+      "payloadVersion":{"major":{"valueInteger":1},"minor":{"valueInteger":0},"revision":{"valueInteger":0},"quality":{"valueCode":"release"}},
+      "callbackUrl":{"valueUrl":"https://partner.example.com/dsp/callback"}
+    },
+    "conditions":[{"id":"cond-001","clinicalStatus":{"coding":[{"code":"active"}]},"code":{"coding":[{"system":"http://snomed.info/sct","code":"10509002"}],"text":"Acute bronchitis"},"onsetDateTime":"2026-04-18","spokenForms":[{"form":{"valueString":"bronchitis"}}]}],
+    "medications":[{"id":"med-001","status":"active","intent":"order","medicationCodeableConcept":{"coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"308460"}],"text":"azithromycin 250 MG oral tablet"},"dosageInstruction":[{"text":"Take 1 tablet by mouth once daily for 5 days"}],"rendered":{"valueString":"Take 1 tablet by mouth once daily for 5 days"},"confidence":{"valueDecimal":0.94}}],
+    "services":[
+      {"id":"lab-001","code":{"coding":[{"system":"http://loinc.org","code":"57021-8"}],"text":"CBC with differential"},"abbrev":{"valueString":"CBC"},"confidence":{"valueDecimal":1.0}},
+      {"id":"img-001","code":{"text":"Chest X-ray, 2 view, without contrast"},"modality":{"valueCoding":{"system":"http://dicom.nema.org/resources/ontology/DCM","code":"CR"}},"views":{"valueString":"2 view"},"contrast":{"valueCode":"without"}},
+      {"id":"fu-001","code":{"text":"Return in ~2 weeks PRN"},"occurrenceTiming":{"repeat":{"boundsDuration":{"value":2,"unit":"wk","code":"wk"}}},"prn":{"valueBoolean":true}}
+    ],
+    "compositions":[{"id":"comp-001","title":"Progress Note","status":"preliminary","type":{"coding":[{"code":"11506-3","display":"Progress note"}]},"section":[{"title":"HISTORY OF PRESENT ILLNESS","code":{"coding":[{"system":"http://loinc.org","code":"10164-2"}]},"text":{"status":"generated","div":"..."}},{"title":"ASSESSMENT AND PLAN","code":{"coding":[{"system":"http://loinc.org","code":"51847-2"}]},"entry":[{"reference":"Condition/cond-001"},{"reference":"MedicationRequest/med-001"},{"reference":"ServiceRequest/lab-001"},{"reference":"ServiceRequest/img-001"},{"reference":"ServiceRequest/fu-001"}]}]}],
+    "transcripts":[{"id":"dr-transcript-001","type":{"coding":[{"code":"102479-6"}]},"content":[{"attachment":{"url":"Binary/bin-transcript-001","contentType":"application/json"}}],"speakerCount":{"valuePositiveInt":2}}]
+  }
+}`}</code></pre>
+
+  <h2>5. Adapter: projecting GraphQL back into DSP</h2>
+<pre><code>{`function toDsp(graph) {
+  const e = graph.data.encounter;
+  const v = e.payloadVersion;
+  return {
+    payload_version: { major: v.major.valueInteger, minor: v.minor.valueInteger,
+                       revision: v.revision.valueInteger, quality: v.quality.valueCode },
+    external_callback_url: e.callbackUrl?.valueUrl,
+    encounter: projectEncounter(e),
+    resources: [
+      ...graph.data.conditions.map(projectCondition),
+      ...graph.data.medications.map(projectMedicationOrder),
+      ...graph.data.services.map(projectOrderByCategory), // lab | imaging | procedure | referral | follow-up
+      ...graph.data.compositions.flatMap(c => c.section.map(projectDocumentSection))
+    ],
+    transcript: projectTranscript(graph.data.transcripts[0])
+  };
+}`}</code></pre>
+  <p>
+    The adapter is deterministic, stateless, and tiny. All semantic decisions (what's a
+    follow-up, what's an imaging order, what counts as the A&amp;P section) live in the IG
+    profiles and ValueSets — not in the code.
+  </p>
+
+  <h2>6. What this gains you</h2>
+  <ul class="clean">
+    <li><strong>Idempotency</strong> — conditional <code class="inline">PUT</code> on identifiers makes retries safe.</li>
+    <li><strong>Provenance by construction</strong> — every resource references the transcript turn via <code class="inline">transcript-turn-refs</code>.</li>
+    <li><strong>One contract, two surfaces</strong> — read-side partners use <code class="inline">$graphql</code>, legacy partners use REST <code class="inline">_include</code> searches; the IG defines both.</li>
+    <li><strong>Versioning without forks</strong> — <code class="inline">payload-version</code> travels on <code class="inline">Encounter</code> + <code class="inline">Bundle.meta</code>; servers query it without out-of-band knowledge.</li>
+  </ul>
+</Layout>

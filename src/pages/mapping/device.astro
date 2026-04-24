@@ -1,0 +1,86 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Device order" active="mapping">
+  <MapHeader
+    title="Device order"
+    dspType="order.device"
+    fhirResource="DeviceRequest (proposed) + Device + DeviceUseStatement (issued/in-use)"
+    summary="DSP device orders cover DME (walker, CPAP, glucose monitor). FHIR's DeviceRequest is the order resource; Device is the physical/logical artifact; DeviceUseStatement (R4) records active use. R5 replaces DeviceUseStatement with DeviceUsage — we note the xver path."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: DEVICE_ORDER</code></td><td><code class="inline">DeviceRequest</code></td><td>R4-native. No ServiceRequest needed.</td></tr>
+        <tr><td><code class="inline">order_data.device_code</code></td><td><code class="inline">codeCodeableConcept</code> <em>or</em> <code class="inline">codeReference</code> → <code class="inline">Device</code></td><td>SNOMED (preferred), HCPCS for US billing context, or UDI via a Device reference.</td></tr>
+        <tr><td><code class="inline">order_data.quantity</code></td><td><code class="inline">quantity</code></td><td>e.g. 1 unit, 30-day supply.</td></tr>
+        <tr><td><code class="inline">order_data.body_site</code></td><td>Extension (no native R4 element on DeviceRequest; R5 adds it — xver candidate)</td><td>Wrap in <code class="inline">dsp-device-body-site</code> extension for R4.</td></tr>
+        <tr><td><code class="inline">order_data.duration</code></td><td><code class="inline">occurrenceTiming.repeat.boundsDuration</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.parameters</code></td><td><code class="inline">parameter</code></td><td>Repeating <code class="inline">code</code> + <code class="inline">value[x]</code> — e.g. CPAP pressure, oxygen rate.</td></tr>
+        <tr><td><code class="inline">order_data.instruction</code></td><td><code class="inline">patientInstruction</code> / <code class="inline">note</code></td><td></td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "dev-001",
+  "type": "DEVICE_ORDER",
+  "context": { "content_type": "order.device" },
+  "description": "CPAP, auto-titrating, 5–15 cmH2O, for OSA",
+  "intent": "order",
+  "reason": "Obstructive sleep apnea, newly diagnosed",
+  "reason_references": ["cond-005"],
+  "provenance": [102, 104, 106],
+  "order_data": {
+    "device_code": "73211009",
+    "device_code_system": "SNOMED",
+    "parameters": [
+      { "code": "pressure_min", "value": 5,  "unit": "cm[H2O]" },
+      { "code": "pressure_max", "value": 15, "unit": "cm[H2O]" }
+    ],
+    "duration": { "value": 12, "unit": "month" }
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"DeviceRequest",
+  "status":"active","intent":"order",
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "codeCodeableConcept":{"coding":[{
+    "system":"http://snomed.info/sct","code":"73211009","display":"Continuous positive airway pressure device"
+  }]},
+  "parameter":[
+    { "code":{"text":"pressure-min"},
+      "valueQuantity":{"value":5,"unit":"cmH2O","system":"http://unitsofmeasure.org","code":"cm[H2O]"}},
+    { "code":{"text":"pressure-max"},
+      "valueQuantity":{"value":15,"unit":"cmH2O","system":"http://unitsofmeasure.org","code":"cm[H2O]"}}
+  ],
+  "occurrenceTiming":{
+    "repeat":{"boundsDuration":{"value":12,"unit":"mo","system":"http://unitsofmeasure.org","code":"mo"}}
+  },
+  "reasonReference":[{"reference":"Condition/cond-005"}]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>R5 crosswalk.</strong> If the server needs to report ongoing use, R4's
+    <code class="inline">DeviceUseStatement</code> is renamed to
+    <code class="inline">DeviceUsage</code> in R5. The IG's R5-xver strategy reuses the
+    element shapes verbatim so a later R5 upgrade is a rename, not a redesign.
+    <code class="inline">DeviceRequest.bodySite</code> is R5-native — we carry it as an
+    extension in R4 with the same URL the R5 element would use.
+  </div>
+</Layout>

@@ -1,0 +1,123 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Immunization order" active="mapping">
+  <MapHeader
+    title="Immunization order"
+    dspType="order.immunization"
+    fhirResource="ImmunizationRecommendation (proposal) or Immunization (administered)"
+    summary="DSP immunization orders split cleanly on intent. A proposed vaccine (“give flu shot at next visit”) lands as ImmunizationRecommendation; an administered dose (“gave flu shot today”) lands as Immunization. Both carry CVX codes. Unlike the generic ServiceRequest pattern, FHIR has two purpose-built resources here — pick by DSP intent."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: IMMUNIZATION_ORDER</code>, <code class="inline">intent=proposal|plan|order</code></td><td><code class="inline">ImmunizationRecommendation</code></td><td>For not-yet-given vaccines. Use when DSP intent is <code class="inline">proposal</code>, <code class="inline">plan</code>, or <code class="inline">order</code> and <code class="inline">order_data.administered</code> is false/absent.</td></tr>
+        <tr><td><code class="inline">type: IMMUNIZATION_ORDER</code>, <code class="inline">intent=order</code> with administration details</td><td><code class="inline">Immunization</code></td><td>For doses actually given in-encounter. <code class="inline">Immunization.status = completed</code>.</td></tr>
+        <tr><td><code class="inline">order_data.vaccine_code</code></td><td><code class="inline">vaccineCode</code></td><td>CVX (<code class="inline">http://hl7.org/fhir/sid/cvx</code>) preferred; SNOMED as fallback.</td></tr>
+        <tr><td><code class="inline">order_data.dose_number</code></td><td><code class="inline">protocolApplied.doseNumberPositiveInt</code> (Immunization) / <code class="inline">doseNumberPositiveInt</code> (ImmunizationRecommendation)</td><td>1, 2, booster, etc.</td></tr>
+        <tr><td><code class="inline">order_data.series</code></td><td><code class="inline">protocolApplied.series</code></td><td>Free text series name.</td></tr>
+        <tr><td><code class="inline">order_data.route</code></td><td><code class="inline">route</code></td><td>SNOMED route.</td></tr>
+        <tr><td><code class="inline">order_data.site</code></td><td><code class="inline">site</code></td><td>Body site.</td></tr>
+        <tr><td><code class="inline">order_data.lot_number</code></td><td><code class="inline">lotNumber</code></td><td>Administered only.</td></tr>
+        <tr><td><code class="inline">order_data.administered_at</code></td><td><code class="inline">occurrenceDateTime</code></td><td>If DSP emits it, treat as "administered".</td></tr>
+        <tr><td><code class="inline">order_data.due_by</code> / <code class="inline">recommended_date</code></td><td><code class="inline">dateCriterion</code> (ImmunizationRecommendation)</td><td>Earliest/recommended/overdue dates.</td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example (proposal — ImmunizationRecommendation)</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "imm-001",
+  "type": "IMMUNIZATION_ORDER",
+  "context": { "content_type": "order.immunization" },
+  "description": "Seasonal influenza vaccine, recommend at next visit",
+  "intent": "proposal",
+  "reason": "Annual flu prevention",
+  "provenance": [78, 79],
+  "order_data": {
+    "vaccine_code": "88",
+    "vaccine_code_system": "CVX",
+    "dose_number": 1,
+    "recommended_date": "2026-10-01"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ImmunizationRecommendation",
+  "patient":{"reference":"Patient/pat-67890"},
+  "date":"2026-04-23T14:32:00Z",
+  "authority":{"reference":"Organization/dsp-tenant"},
+  "recommendation":[{
+    "vaccineCode":[{"coding":[{
+      "system":"http://hl7.org/fhir/sid/cvx","code":"88","display":"Influenza, unspecified formulation"
+    }]}],
+    "forecastStatus":{"coding":[{
+      "system":"http://terminology.hl7.org/CodeSystem/immunization-recommendation-status",
+      "code":"due"
+    }]},
+    "doseNumberPositiveInt":1,
+    "dateCriterion":[{
+      "code":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/immunization-recommendation-date-criterion","code":"recommended"}]},
+      "value":"2026-10-01"
+    }]
+  }]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <h2>Side-by-side example (administered — Immunization)</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "imm-002",
+  "type": "IMMUNIZATION_ORDER",
+  "context": { "content_type": "order.immunization" },
+  "description": "Tdap administered in office",
+  "intent": "order",
+  "order_data": {
+    "vaccine_code": "115",
+    "vaccine_code_system": "CVX",
+    "administered_at": "2026-04-23T14:10:00Z",
+    "route": "intramuscular",
+    "site": "left_deltoid",
+    "lot_number": "AB12345"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4</h3>
+<pre><code>{`{
+  "resourceType":"Immunization",
+  "status":"completed",
+  "vaccineCode":{"coding":[{
+    "system":"http://hl7.org/fhir/sid/cvx","code":"115","display":"Tdap"
+  }]},
+  "patient":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "occurrenceDateTime":"2026-04-23T14:10:00Z",
+  "lotNumber":"AB12345",
+  "site":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/v3-ActSite","code":"LD","display":"Left deltoid"}]},
+  "route":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration","code":"IM","display":"Intramuscular"}]}
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>Disambiguation rule.</strong> DSP's single <code class="inline">IMMUNIZATION_ORDER</code>
+    type collapses two FHIR concepts. The IG routes based on whether the DSP payload
+    carries evidence of administration (<code class="inline">administered_at</code>, <code class="inline">lot_number</code>,
+    <code class="inline">status=completed</code>). Producers should split in-band where
+    possible; consumers treat either shape as valid.
+  </div>
+</Layout>

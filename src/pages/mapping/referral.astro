@@ -1,0 +1,76 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Referral order" active="mapping">
+  <MapHeader
+    title="Referral order"
+    dspType="order.referral"
+    fhirResource="ServiceRequest (category=referral, intent=plan)"
+    summary="In R4, the standalone ReferralRequest from DSTU2 was merged into ServiceRequest. A referral is a ServiceRequest with a referral category and a target Practitioner / specialty."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: REFERRAL_ORDER</code></td><td><code class="inline">ServiceRequest.category = referral</code></td><td><code class="inline">http://snomed.info/sct|3457005</code> or US Core referral category.</td></tr>
+        <tr><td><code class="inline">intent</code></td><td><code class="inline">ServiceRequest.intent</code> (typically <code class="inline">plan</code> or <code class="inline">order</code>)</td><td></td></tr>
+        <tr><td>target specialty</td><td><code class="inline">ServiceRequest.performerType</code> (SNOMED)</td><td></td></tr>
+        <tr><td>target provider</td><td><code class="inline">ServiceRequest.performer</code> → Practitioner / PractitionerRole</td><td></td></tr>
+        <tr><td>reason for referral</td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+        <tr><td>supporting info (labs, notes)</td><td><code class="inline">supportingInfo</code></td><td>References to Condition, Observation, DocumentReference.</td></tr>
+        <tr><td>referral letter (DSP <code class="inline">document</code>)</td><td><code class="inline">Composition</code> with <code class="inline">type</code>=LOINC <code class="inline">57133-1</code></td><td>Or <code class="inline">DocumentReference</code> attachment. Link via <code class="inline">ServiceRequest.supportingInfo</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="callout warn">
+    DSP 1.0's public documentation does not yet include a dedicated referral order schema page
+    (the <code class="inline">order.referral</code> URL currently 404s). The DSP example below is
+    <em>inferred</em> from the base order schema + common referral patterns — treat as illustrative
+    until the Microsoft docs publish the canonical shape.
+  </div>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP (inferred shape)</h3>
+<pre><code>{`{
+  "id": "ref-001",
+  "type": "REFERRAL_ORDER",
+  "context": { "content_type": "order.referral" },
+  "description": "Referral to Cardiology for atypical chest pain workup",
+  "intent": "plan",
+  "reason": "Atypical chest pain, workup requested",
+  "reason_references": ["cond-cp-001"],
+  "order_data": {
+    "specialty": {
+      "text": "Cardiology",
+      "codes": [{"system":"snomed","code":"394579002"}]
+    },
+    "to_provider": "Dr. Elena Park, MD",
+    "urgency": "routine",
+    "supporting_documents": ["doc-001"]
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"plan",
+  "category":[{"coding":[{"system":"http://snomed.info/sct","code":"3457005","display":"Patient referral"}]}],
+  "code":{"text":"Referral to Cardiology"},
+  "performerType":{"coding":[{"system":"http://snomed.info/sct","code":"394579002","display":"Cardiology"}]},
+  "performer":[{"display":"Dr. Elena Park, MD"}],
+  "priority":"routine",
+  "reasonCode":[{"text":"Atypical chest pain, workup requested"}],
+  "reasonReference":[{"reference":"Condition/cond-cp-001"}],
+  "supportingInfo":[{"reference":"DocumentReference/referral-letter-001"}],
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"}
+}`}</code></pre>
+    </div>
+  </div>
+</Layout>

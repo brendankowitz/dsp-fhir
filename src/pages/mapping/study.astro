@@ -1,0 +1,125 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Study order" active="mapping">
+  <MapHeader
+    title="Study order"
+    dspType="order.study"
+    fhirResource="ServiceRequest (category=study) or ResearchSubject + ResearchStudy"
+    summary="DSP study orders are semantically ambiguous — they can mean 'order a diagnostic study' (cardiology, sleep, EEG) or 'enroll the patient in a research study'. The IG routes by DSP intent + order_data shape. Diagnostic studies are ServiceRequest; research enrollments are ResearchSubject."
+  />
+
+  <h2>Routing rule</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>DSP signal</th><th>FHIR target</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td>Order names a diagnostic protocol (polysomnogram, Holter, EEG, stress test)</td><td><code class="inline">ServiceRequest</code> (<code class="inline">category=study</code>)</td><td>It's an ordered procedure that produces a report. If it produces images, <code class="inline">ImagingStudy</code> is the result, not the order.</td></tr>
+        <tr><td>Order references a <code class="inline">study_id</code> / protocol identifier and an enrollment intent</td><td><code class="inline">ResearchSubject</code> → <code class="inline">ResearchStudy</code></td><td>True clinical-trial enrollment; distinct operational resource set.</td></tr>
+        <tr><td>Genomic / specialized study (pharmacogenomic panel)</td><td><code class="inline">ServiceRequest</code> (<code class="inline">category=study</code>) with a genomics profile</td><td>Treat like a lab order; result lands as <code class="inline">Observation</code> + <code class="inline">MolecularSequence</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Field-by-field (diagnostic study path)</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: STUDY_ORDER</code></td><td><code class="inline">ServiceRequest.category = study</code></td><td>IG CodeSystem <code class="inline">order-category</code>, code <code class="inline">study</code>. Bind <code class="inline">ServiceRequest.code</code> to the specific study protocol (LOINC or SNOMED).</td></tr>
+        <tr><td><code class="inline">order_data.study_code</code></td><td><code class="inline">code</code></td><td>LOINC for cardiac/sleep studies (e.g. <code class="inline">28633-6</code> polysomnogram); SNOMED <code class="inline">252465000</code> for echocardiogram etc.</td></tr>
+        <tr><td><code class="inline">order_data.modality</code></td><td><code class="inline">category</code> (second coding) or extension</td><td>Cardiology, neurology, sleep lab — helps routing to a specialty queue.</td></tr>
+        <tr><td><code class="inline">order_data.priority</code></td><td><code class="inline">priority</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.scheduled_for</code></td><td><code class="inline">occurrenceDateTime</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.preparation</code></td><td><code class="inline">patientInstruction</code></td><td>"NPO after midnight", "hold beta blockers 24h", etc.</td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example (diagnostic study)</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "study-001",
+  "type": "STUDY_ORDER",
+  "context": { "content_type": "order.study" },
+  "description": "In-lab polysomnogram to evaluate suspected OSA",
+  "intent": "order",
+  "reason": "Witnessed apneas; daytime somnolence",
+  "provenance": [71, 73],
+  "order_data": {
+    "study_code": "28633-6",
+    "study_code_system": "LOINC",
+    "modality": "sleep",
+    "preparation": "Avoid caffeine and alcohol on day of study"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[
+    {"coding":[{"system":"https://dsp-fhir.org/CodeSystem/order-category","code":"study"}]},
+    {"coding":[{"system":"https://dsp-fhir.org/CodeSystem/study-modality","code":"sleep"}]}
+  ],
+  "code":{"coding":[{"system":"http://loinc.org","code":"28633-6","display":"Sleep study panel"}]},
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "patientInstruction":"Avoid caffeine and alcohol on day of study",
+  "reasonCode":[{"text":"Witnessed apneas; daytime somnolence"}]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <h2>Side-by-side example (research enrollment path)</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "study-002",
+  "type": "STUDY_ORDER",
+  "context": { "content_type": "order.study" },
+  "description": "Enroll patient in PROMISE-HF clinical trial",
+  "intent": "order",
+  "order_data": {
+    "study_id": "NCT05123456",
+    "study_title": "PROMISE-HF: Precision Therapy in Heart Failure",
+    "enrollment_date": "2026-05-01"
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (two resources)</h3>
+<pre><code>{`// Referenced study (may pre-exist)
+{
+  "resourceType":"ResearchStudy",
+  "id":"promise-hf",
+  "status":"active",
+  "identifier":[{"system":"https://clinicaltrials.gov","value":"NCT05123456"}],
+  "title":"PROMISE-HF: Precision Therapy in Heart Failure"
+}
+
+// Patient enrollment
+{
+  "resourceType":"ResearchSubject",
+  "status":"candidate",
+  "study":{"reference":"ResearchStudy/promise-hf"},
+  "individual":{"reference":"Patient/pat-67890"},
+  "period":{"start":"2026-05-01"}
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <strong>Disambiguation.</strong> DSP 1.0 does not (as of the spec revision the IG
+    tracks) distinguish diagnostic studies from research enrollments structurally. The
+    IG routes on the presence of a <code class="inline">study_id</code> matching a
+    clinical-trial registry. Producers SHOULD emit the research variant with an
+    explicit <code class="inline">trial_registry</code> marker to remove ambiguity.
+  </div>
+</Layout>

@@ -1,0 +1,116 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Document section" active="mapping">
+  <MapHeader
+    title="Document section"
+    dspType="document_section"
+    fhirResource="Composition.section (preferred) or DocumentReference"
+    summary="Each DSP document_section becomes a section of a FHIR Composition. The Composition is the root of the clinical note; sections carry LOINC-coded titles, narrative content, and entry references to structured resources."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">legacy_id</code></td><td>Extension <code class="inline">dsp-legacy-id</code> on <code class="inline">section</code></td><td>Preserve legacy identity.</td></tr>
+        <tr><td><code class="inline">context.display_description</code></td><td><code class="inline">section.title</code></td><td>+ translation extension for locales.</td></tr>
+        <tr><td><code class="inline">context.codes</code> (LOINC)</td><td><code class="inline">section.code</code></td><td>"History of Present Illness" = LOINC 10164-2.</td></tr>
+        <tr><td><code class="inline">context.spoken_forms</code></td><td>Extension <code class="inline">spoken-forms</code> on <code class="inline">section</code></td><td></td></tr>
+        <tr><td><code class="inline">content</code> (free text)</td><td><code class="inline">section.text.div</code> (XHTML narrative)</td><td>Wrap in <code class="inline">&lt;div xmlns="http://www.w3.org/1999/xhtml"&gt;</code>.</td></tr>
+        <tr><td><code class="inline">status</code> (edited/active/draft/…)</td><td><code class="inline">Composition.status</code> (whole doc) + extension for section-level edit state</td><td>FHIR has no per-section status; DSP's <code class="inline">edited</code> is DSP-unique.</td></tr>
+        <tr><td><code class="inline">parent_reference</code></td><td>Parent Composition</td><td>Sections are nested in one Composition.</td></tr>
+        <tr><td>references to structured resources (conditions, orders)</td><td><code class="inline">section.entry[]</code></td><td>This is how A&amp;P sections link to <code class="inline">Condition</code> / <code class="inline">ServiceRequest</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "legacy_id": "hpi_2",
+  "context": {
+    "content_type": "document_section",
+    "display_description": "HISTORY OF PRESENT ILLNESS",
+    "codes": [{"system":"loinc.org","identifier":"10164-2"}],
+    "spoken_forms": ["HPI","history","subjective"]
+  },
+  "content": "The patient is a 25-year-old male who presents for evaluation of cough, cold, fever..."
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR Composition)</h3>
+<pre><code>{`{
+  "resourceType":"Composition",
+  "status":"preliminary",
+  "type":{"coding":[{"system":"http://loinc.org","code":"11506-3","display":"Progress note"}]},
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "date":"2025-06-18T14:30:00Z",
+  "author":[{"reference":"Practitioner/pract-001"}],
+  "title":"Progress Note",
+  "section":[
+    {
+      "title":"HISTORY OF PRESENT ILLNESS",
+      "code":{"coding":[{"system":"http://loinc.org","code":"10164-2"}]},
+      "text":{
+        "status":"generated",
+        "div":"<div xmlns=\\"http://www.w3.org/1999/xhtml\\"><p>The patient is a 25-year-old male who presents for evaluation of cough, cold, fever...</p></div>"
+      },
+      "extension":[
+        {"url":"https://dsp-fhir.org/StructureDefinition/spoken-forms",
+         "extension":[
+           {"url":"form","valueString":"HPI"},
+           {"url":"form","valueString":"history"},
+           {"url":"form","valueString":"subjective"}
+         ]},
+        {"url":"https://dsp-fhir.org/StructureDefinition/legacy-id","valueString":"hpi_2"}
+      ]
+    },
+    {
+      "title":"ASSESSMENT & PLAN",
+      "code":{"coding":[{"system":"http://loinc.org","code":"51847-2"}]},
+      "entry":[
+        {"reference":"Condition/condition-001"},
+        {"reference":"MedicationRequest/med-001"},
+        {"reference":"ServiceRequest/lab-001"}
+      ]
+    }
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <h2>Section-type catalog (DSP "Overview" and friends)</h2>
+  <p>
+    DSP carries section type in <code class="inline">context.codes</code> (LOINC). The
+    IG treats "Overview" and similar section names as values of
+    <code class="inline">document_section</code>, not separate content_types. This table
+    pins the common section codes producers emit and their LOINC bindings.
+  </p>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP section name</th><th>LOINC (<code class="inline">section.code</code>)</th><th>Typical entries</th></tr></thead>
+      <tbody>
+        <tr><td>Overview / Summary</td><td><code class="inline">51855-5</code> (Patient note) or <code class="inline">8648-8</code> (Hospital course)</td><td>Narrative only; rarely carries structured <code class="inline">entry</code>.</td></tr>
+        <tr><td>History of Present Illness</td><td><code class="inline">10164-2</code></td><td>Narrative only.</td></tr>
+        <tr><td>Review of Systems</td><td><code class="inline">10187-3</code></td><td>Narrative; optionally linked <code class="inline">Observation</code>s.</td></tr>
+        <tr><td>Past Medical History</td><td><code class="inline">11348-0</code></td><td><code class="inline">Condition</code> entries.</td></tr>
+        <tr><td>Medications</td><td><code class="inline">10160-0</code></td><td><code class="inline">MedicationStatement</code> / <code class="inline">MedicationRequest</code>.</td></tr>
+        <tr><td>Allergies</td><td><code class="inline">48765-2</code></td><td><code class="inline">AllergyIntolerance</code>.</td></tr>
+        <tr><td>Physical Exam</td><td><code class="inline">29545-1</code></td><td>Narrative; optionally <code class="inline">Observation</code>.</td></tr>
+        <tr><td>Assessment &amp; Plan</td><td><code class="inline">51847-2</code></td><td><code class="inline">Condition</code> + orders (<code class="inline">MedicationRequest</code>, <code class="inline">ServiceRequest</code>).</td></tr>
+        <tr><td>Plan of Treatment</td><td><code class="inline">18776-5</code></td><td>Orders + <code class="inline">CarePlan</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    The full authoritative mapping lives in the <a href="/dsp-fhir/terminology">terminology appendix</a>.
+    Producers SHOULD prefer these LOINC codes so consumers can route sections without
+    string matching on DSP display names.
+  </p>
+</Layout>

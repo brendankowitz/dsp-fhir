@@ -1,0 +1,255 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="DSP as a $graphql query" active="graphql">
+  <h1>DSP as a FHIR <code style="font-size:inherit">$graphql</code> projection</h1>
+  <p class="lead">
+    The cleanest mental model for DSP: it is a <em>shaped projection</em> of FHIR resources
+    associated with an encounter, plus a small sidecar envelope. FHIR's
+    <code class="inline">$graphql</code> operation is the canonical way to get exactly that.
+  </p>
+
+  <h2>Why <code class="inline">$graphql</code> fits DSP almost perfectly</h2>
+  <div class="grid cols-2">
+    <div class="card tight">
+      <h3 style="margin-top:0">Shape matches</h3>
+      <p style="color:var(--muted)">DSP's polymorphic <code class="inline">resources[]</code> array is a hand-rolled version
+      of what GraphQL produces natively: one query, many resource types, nested children.</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">Projection matches</h3>
+      <p style="color:var(--muted)">DSP only wants a subset of FHIR fields. GraphQL lets the client pick precisely those —
+      no bloat, no <code class="inline">_elements</code> gymnastics.</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">Traversal matches</h3>
+      <p style="color:var(--muted)">DSP's <code class="inline">parent_reference</code> / <code class="inline">child_references</code>
+      map directly to GraphQL resource-reference resolution. No <code class="inline">_include</code>/<code class="inline">_revinclude</code>.</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">Extensions are first-class</h3>
+      <p style="color:var(--muted)"><code class="inline">extension(url:"...")</code> selectors expose DSP-specific fields
+      (confidence, spoken forms, transcript turns) through the same query.</p>
+    </div>
+  </div>
+
+  <h2>A canonical DSP query (R4 + DSP-FHIR IG)</h2>
+  <p>
+    The query is executed at the system level: <code class="inline">POST [fhir-base]/$graphql</code>
+    with the encounter id passed as a GraphQL variable. FHIR's GraphQL binding uses
+    <code class="inline">*List</code> root fields for lists and takes <code class="inline">_reference</code>
+    arguments for reverse-reference searches.
+  </p>
+<pre><code>{`query DSP($encId: ID!) {
+  encounter: Encounter(id: $encId) {
+    id
+    status
+    class { code display }
+    period { start end }
+    subject  { resource { ... on Patient { id identifier { system value } name { given family } gender birthDate } } }
+    participant {
+      individual { resource { ... on Practitioner { id name { given family } identifier { system value } qualification { code { coding { system code display } } } } } }
+    }
+    reasonCode { coding { system code display } }
+
+    # DSP envelope extensions (all complex — defined by the DSP-FHIR IG)
+    payloadVersion: extension(url: "https://dsp-fhir.org/StructureDefinition/payload-version") {
+      major:     extension(url: "major")    { valueInteger }
+      minor:     extension(url: "minor")    { valueInteger }
+      revision:  extension(url: "revision") { valueInteger }
+      quality:   extension(url: "quality")  { valueCode }
+    }
+    callbackUrl: extension(url: "https://dsp-fhir.org/StructureDefinition/external-callback-url") { valueUrl }
+  }
+
+  # Lists are separate root fields; joined to the encounter via _reference.
+  conditions: ConditionList(encounter: $encId) {
+    id
+    clinicalStatus { coding { code } }
+    verificationStatus { coding { code } }
+    category { coding { code } }
+    code { coding { system code display } text }
+    severity { coding { code } }
+    onsetDateTime
+    spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/spoken-forms") {
+      form: extension(url: "form") { valueString }
+    }
+    turns: extension(url: "https://dsp-fhir.org/StructureDefinition/transcript-turn-refs") {
+      turn: extension(url: "turn") { valueInteger }
+    }
+  }
+
+  medications: MedicationRequestList(encounter: $encId) {
+    id intent status
+    medicationCodeableConcept { coding { system code display } text }
+    dosageInstruction {
+      text
+      timing { repeat { frequency period periodUnit } }
+      asNeededBoolean
+      route { coding { system code display } }
+      doseAndRate { doseQuantity { value unit system code } }
+    }
+    dispenseRequest { numberOfRepeatsAllowed quantity { value unit } }
+    reasonCode { text coding { system code } }
+    reasonReference { reference }
+    rendered: extension(url: "https://dsp-fhir.org/StructureDefinition/rendered-dosage-instruction") { valueString }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/confidence-score") { valueDecimal }
+  }
+
+  services: ServiceRequestList(encounter: $encId) {
+    id intent
+    category { coding { code } }
+    code { coding { system code display } text }
+    bodySite { coding { code display }
+      laterality: extension(url: "https://dsp-fhir.org/StructureDefinition/bodysite-laterality") { valueCode }
+    }
+    specimen { reference }   # lab: references Specimen resource
+    patientInstruction
+    note { text }
+    occurrenceTiming { repeat { boundsDuration { value unit code } } }   # follow-up
+    reasonReference { reference }
+
+    # Per-subtype extensions used only by the matching profile:
+    modality: extension(url: "https://dsp-fhir.org/StructureDefinition/imaging-modality") { valueCoding { system code display } }
+    views:    extension(url: "https://dsp-fhir.org/StructureDefinition/imaging-views")    { valueString }
+    contrast: extension(url: "https://dsp-fhir.org/StructureDefinition/imaging-contrast") { valueCode }
+    returnIn: extension(url: "https://dsp-fhir.org/StructureDefinition/return-in")        { valueDuration { value unit code } }
+    prn:      extension(url: "https://dsp-fhir.org/StructureDefinition/prn")              { valueBoolean }
+    abbrev:   extension(url: "https://dsp-fhir.org/StructureDefinition/abbreviation")     { valueString }
+    devices:  extension(url: "https://dsp-fhir.org/StructureDefinition/procedure-devices") {
+      device: extension(url: "device") { valueString }
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/confidence-score") { valueDecimal }
+  }
+
+  compositions: CompositionList(encounter: $encId) {
+    id title status type { coding { code display } } language
+    section {
+      title
+      code { coding { system code display } }
+      text { status div }
+      entry { reference }
+      spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/spoken-forms") {
+        form: extension(url: "form") { valueString }
+      }
+    }
+  }
+
+  transcripts: DocumentReferenceList(encounter: $encId, category: "https://dsp-fhir.org/CodeSystem/doc-category|transcript") {
+    id status type { coding { code display } }
+    content { attachment { url contentType language } }
+    context { period { start end } }
+    speakerCount: extension(url: "https://dsp-fhir.org/StructureDefinition/speaker-count") { valuePositiveInt }
+  }
+}`}</code></pre>
+
+  <h2>What that response looks like to a DSP consumer</h2>
+  <p>
+    One HTTP call. One JSON document. Grouped by resource type — exactly the polymorphic
+    <code class="inline">resources[]</code> grouping DSP already uses. A DSP adapter becomes a
+    straightforward field renamer plus an extension-to-property flattener.
+  </p>
+
+<pre><code>{`// DSP adapter pseudocode (system-level $graphql with variables)
+const res = await fhir.post('/$graphql', {
+  query: DSP_QUERY,
+  variables: { encId: encounterId }
+});
+const { encounter, conditions, medications, services, compositions, transcripts } = res.data;
+
+return {
+  payload_version: flattenPayloadVersion(encounter.payloadVersion),
+  external_callback_url: encounter.callbackUrl?.valueUrl,
+  encounter: toDspEncounter(encounter),
+  resources: [
+    ...conditions.map(toDspCondition),
+    ...medications.map(toDspMedicationOrder),
+    ...services.map(toDspOrderByCategory),  // lab/imaging/procedure/referral/follow-up
+    ...compositions.flatMap(c => c.section.map(toDspDocumentSection)),
+  ],
+  transcript: toDspTranscript(transcripts),
+};`}</code></pre>
+
+  <h2 id="rest-fallback">Fallbacks (when <code class="inline">$graphql</code> isn't available)</h2>
+  <p>
+    Before going to REST <code class="inline">_include</code>, try
+    <code class="inline">Encounter/$everything</code> — one call, widely implemented,
+    returns a Bundle of the encounter and its referenced resources:
+  </p>
+<pre><code>{`GET [fhir-base]/Encounter/{id}/$everything`}</code></pre>
+  <p>
+    It's coarser than the canonical <code class="inline">$graphql</code> query (no
+    field shaping, no filter on DocumentReference category) but it beats six round-trips.
+    If even <code class="inline">$everything</code> isn't available:
+  </p>
+  <h3>REST <code class="inline">_include</code> fan-out</h3>
+  <p>
+    <code class="inline">$graphql</code> is an optional FHIR operation. Many production servers don't
+    expose it. The DSP-FHIR IG defines two layered fallbacks, in preference order.
+    Prior art for the whole "canonical projection" pattern is IPS
+    <a href="https://hl7.org/fhir/uv/ips/OperationDefinition-summary.html"><code class="inline">Patient/$summary</code></a>
+    — DSP's canonical query is morally the same shape scoped to an encounter.
+  </p>
+<pre><code>{`GET  [fhir-base]/Encounter/{id}?_include=Encounter:subject
+                               &_include=Encounter:participant
+                               &_include=Encounter:location
+GET  [fhir-base]/Condition?encounter={id}
+GET  [fhir-base]/MedicationRequest?encounter={id}
+GET  [fhir-base]/ServiceRequest?encounter={id}
+GET  [fhir-base]/Composition?encounter={id}&_include=Composition:section:entry
+GET  [fhir-base]/DocumentReference?encounter={id}
+                                  &category=https://dsp-fhir.org/CodeSystem/doc-category|transcript`}</code></pre>
+  <p>
+    Six REST calls versus one GraphQL call. The IG publishes both shapes so implementers pick
+    based on their server. DSP's projection shape is the same either way.
+  </p>
+
+  <h2>What <code class="inline">$graphql</code> does <em>not</em> solve on its own</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>DSP concept</th><th>Why GraphQL alone is insufficient</th><th>Remedy</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code class="inline">transcript.turns[]</code> (speaker, start/end time, index)</td>
+          <td>Not a native FHIR resource; DSP's <code class="inline">provenance: [11,15]</code> is an integer offset.</td>
+          <td>Model turns as a structured <code class="inline">DocumentReference</code> (JSON attachment) and keep integer offsets in a DSP extension on each emitted resource. GraphQL still fetches it, but the shape is DSP-defined.</td>
+        </tr>
+        <tr>
+          <td>Write path (partner → Dragon updates)</td>
+          <td>R4 <code class="inline">$graphql</code> is read-only in practice.</td>
+          <td>Use REST <code class="inline">transaction</code> <code class="inline">Bundle</code> or resource-level <code class="inline">PUT</code>/<code class="inline">POST</code> for writes. Keep <code class="inline">$graphql</code> as the read contract only.</td>
+        </tr>
+        <tr>
+          <td><code class="inline">payload_version</code> (major/minor/revision/quality)</td>
+          <td>Not a resource element.</td>
+          <td>DSP extension on <code class="inline">Encounter</code> or <code class="inline">Bundle.meta</code>; surface via GraphQL <code class="inline">extension()</code> selector.</td>
+        </tr>
+        <tr>
+          <td><code class="inline">update_status: NEW / UPDATED / DELETED</code></td>
+          <td>FHIR uses <code class="inline">meta.versionId</code> + history, not an in-line enum.</td>
+          <td>Derive from <code class="inline">meta.versionId</code> + <code class="inline">Provenance.activity</code>; or pin to a DSP extension if producer-driven.</td>
+        </tr>
+        <tr>
+          <td>Push delivery of DSP</td>
+          <td>GraphQL is pull.</td>
+          <td><code class="inline">SubscriptionTopic</code> (R4B/R5) with a topic bound to "encounter.dsp-ready"; payload URL fires the canonical query.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>Spec status caveat.</strong> FHIR <code class="inline">$graphql</code> is an optional
+    operation and has been <a href="https://build.fhir.org/graphql.html">draft/trial-use</a> through
+    R4 and R5. Many production servers don't implement it. Treat the GraphQL query here as the
+    <em>preferred</em> read shape for DSP — not the only one. The <a href="#rest-fallback">REST fallback</a>
+    above is required-level in the IG.
+  </div>
+
+  <div class="callout ok">
+    <strong>Bottom line.</strong> Treat the canonical DSP GraphQL query as a
+    <em>published artifact of the DSP-FHIR IG</em>. Versioning the query versions DSP. Any
+    partner with an R4 server that implements <code class="inline">$graphql</code> + a handful
+    of DSP extensions can speak DSP natively — no parallel schema required.
+  </div>
+</Layout>

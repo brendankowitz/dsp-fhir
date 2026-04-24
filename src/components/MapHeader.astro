@@ -1,0 +1,21 @@
+---
+export interface Props {
+  title: string;
+  dspType: string;
+  fhirResource: string;
+  summary: string;
+}
+const { title, dspType, fhirResource, summary } = Astro.props;
+---
+<h1>{title}</h1>
+<p class="lead">{summary}</p>
+<div class="grid cols-2">
+  <div class="card tight">
+    <div class="badge info">DSP content_type</div>
+    <h3 style="margin:6px 0"><code class="inline">{dspType}</code></h3>
+  </div>
+  <div class="card tight">
+    <div class="badge ok">FHIR target</div>
+    <h3 style="margin:6px 0"><code class="inline">{fhirResource}</code></h3>
+  </div>
+</div>

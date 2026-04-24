@@ -1,0 +1,88 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Laboratory order" active="mapping">
+  <MapHeader
+    title="Laboratory order"
+    dspType="order.laboratory"
+    fhirResource="ServiceRequest (category=laboratory) + Specimen"
+    summary="DSP lab orders map onto ServiceRequest with category=laboratory. The lab concept is a LOINC-coded CodeableConcept in ServiceRequest.code, and sample_type becomes a Specimen resource."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: LAB_ORDER</code></td><td><code class="inline">ServiceRequest.category = laboratory</code></td><td>Use <code class="inline">http://snomed.info/sct|108252007</code>.</td></tr>
+        <tr><td><code class="inline">intent</code></td><td><code class="inline">ServiceRequest.intent</code></td><td></td></tr>
+        <tr><td><code class="inline">description</code></td><td><code class="inline">ServiceRequest.code.text</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.lab.codes</code> (LOINC)</td><td><code class="inline">ServiceRequest.code.coding[]</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.lab_abbreviation</code></td><td>Extension <code class="inline">abbreviation</code></td><td>"CMP" / "CBC".</td></tr>
+        <tr><td><code class="inline">order_data.sample_type</code></td><td><code class="inline">ServiceRequest.specimen</code> → <code class="inline">Specimen.type</code></td><td>SNOMED specimen codes.</td></tr>
+        <tr><td><code class="inline">order_data.lab_instructions</code></td><td><code class="inline">ServiceRequest.note.text</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.patient_instructions</code></td><td><code class="inline">ServiceRequest.patientInstruction</code></td><td></td></tr>
+        <tr><td><code class="inline">reason</code> / <code class="inline">reason_references</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+        <tr><td><code class="inline">confidence_score</code></td><td>DSP extension</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "a61aa82032764e389481dba3dc090748",
+  "type": "LAB_ORDER",
+  "context": { "content_type": "order.laboratory" },
+  "description": "Comprehensive metabolic panel to assess kidney function",
+  "intent": "order",
+  "order_data": {
+    "lab": {
+      "text": "Comprehensive metabolic panel to assess kidney function",
+      "codes": [{
+        "system":"LOINC","code":"24323-8",
+        "description":"Comprehensive metabolic 2000 panel"
+      }]
+    },
+    "lab_abbreviation": "CMP",
+    "sample_type": "blood",
+    "lab_instructions": "Fasting specimen preferred",
+    "patient_instructions": "Fast for 8-12 hours before blood draw. Repeat in 3 months."
+  },
+  "confidence_score": 1.0
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[{"coding":[{"system":"http://snomed.info/sct","code":"108252007","display":"Laboratory procedure"}]}],
+  "code":{
+    "text":"Comprehensive metabolic panel to assess kidney function",
+    "coding":[{"system":"http://loinc.org","code":"24323-8"}]
+  },
+  "specimen":[{"reference":"Specimen/spec-1"}],
+  "patientInstruction":"Fast for 8-12 hours before blood draw. Repeat in 3 months.",
+  "note":[{"text":"Fasting specimen preferred"}],
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "extension":[
+    {"url":"https://dsp-fhir.org/StructureDefinition/abbreviation","valueString":"CMP"},
+    {"url":"https://dsp-fhir.org/StructureDefinition/confidence-score","valueDecimal":1.0}
+  ]
+}
+
+// Companion Specimen resource
+{
+  "resourceType":"Specimen",
+  "id":"spec-1",
+  "type":{"coding":[{"system":"http://snomed.info/sct","code":"119297000","display":"Blood specimen"}]},
+  "subject":{"reference":"Patient/pat-67890"}
+}`}</code></pre>
+    </div>
+  </div>
+</Layout>

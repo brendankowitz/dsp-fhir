@@ -1,0 +1,63 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="DSP ⇄ FHIR — Overview" active="overview">
+  <section class="hero">
+    <h1>A FHIR-first interoperability core for the Dragon Standard Payload.</h1>
+    <p class="sub">
+      DSP 1.0 is a bespoke, partner-facing JSON schema for Dragon Copilot. This site treats FHIR as
+      the canonical interoperability model and asks one question: <em>how do we make every DSP
+      field first-class in FHIR without inventing a parallel data world?</em>
+    </p>
+  </section>
+
+  <div class="card">
+    <h3 style="margin-top:0">Thesis</h3>
+    <p>
+      <strong>DSP is not a competitor to FHIR — it is a purpose-shaped projection of it.</strong>
+      Encounters, practitioners, conditions, medications, labs, imaging, procedures, referrals,
+      follow-ups, and document sections are all direct FHIR concepts. The DSP-specific bits
+      (transcript turns, spoken forms, confidence scores, payload versioning) are thin envelope
+      metadata that FHIR handles cleanly with extensions and <code class="inline">$graphql</code>.
+    </p>
+    <p style="margin-bottom:0">
+      The recommendation of this site: <strong>anchor at FHIR R4</strong> (deployment reality),
+      borrow <strong>R5/R6 via cross-version extensions</strong> where they materially improve
+      fidelity, and publish DSP as <strong>a small Implementation Guide + a canonical
+      <code class="inline">$graphql</code> query</strong> — not as a parallel schema.
+    </p>
+  </div>
+
+  <div class="grid cols-3">
+    <div class="card tight">
+      <span class="badge ok">Pick</span>
+      <h3 style="margin:6px 0 4px">R4 as the core</h3>
+      <p style="color:var(--muted); margin:0">Universal EHR support, US Core, HTI-1 / CMS-9115-F alignment. This is where the wire lives.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge info">Borrow</span>
+      <h3 style="margin:6px 0 4px">R5 via xver extensions</h3>
+      <p style="color:var(--muted); margin:0">Certainty, improved <code class="inline">MedicationRequest</code>, <code class="inline">Ingredient</code>, Subscription/Topic for callbacks.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge warn">Watch</span>
+      <h3 style="margin:6px 0 4px">R6 as a direction</h3>
+      <p style="color:var(--muted); margin:0">Still ballot. Use its profiling refinements to inform IG design, but don't bind yet.</p>
+    </div>
+  </div>
+
+  <h2>What this site contains</h2>
+  <ul class="clean">
+    <li><a href="/dsp-fhir/dsp-primer">DSP primer</a> — the payload shape, distilled.</li>
+    <li><a href="/dsp-fhir/evaluation">R4 vs R5 vs R6 evaluation</a> — matrix + verdict.</li>
+    <li><a href="/dsp-fhir/graphql"><code class="inline">$graphql</code> as DSP transport</a> — DSP-shaped response in one query.</li>
+    <li><a href="/dsp-fhir/mapping">Resource mapping catalog</a> — every DSP concept to its FHIR home.</li>
+    <li><a href="/dsp-fhir/ig">DSP-FHIR IG outline</a> — profiles, extensions, bindings.</li>
+    <li><a href="/dsp-fhir/gaps">Gaps & open questions</a> — where FHIR stretches and where we extend it.</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Design principle.</strong> If a DSP field has a FHIR home, use it.
+    If it doesn't, extend — don't fork. The IG's job is to make that boundary explicit.
+  </div>
+</Layout>

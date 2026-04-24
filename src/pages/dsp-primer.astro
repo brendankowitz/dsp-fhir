@@ -1,0 +1,107 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="DSP primer" active="dsp">
+  <h1>DSP 1.0 in one page</h1>
+  <p class="lead">
+    The Dragon Standard Payload is a JSON envelope delivered between Dragon Copilot and
+    partner apps. It bundles session metadata, the transcript, an optional document, and a
+    polymorphic array of clinical <em>resources</em>.
+  </p>
+
+  <h2>Top-level envelope</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">payload_version</code></td><td>string</td><td>major.minor.revision + quality enum (<code class="inline">Complete</code>, <code class="inline">Intermediate</code>, <code class="inline">TransientlyDegraded</code>, <code class="inline">PermanentlyDegraded</code>, <code class="inline">Failed</code>)</td></tr>
+        <tr><td><code class="inline">priority</code></td><td>string</td><td>low / medium / high</td></tr>
+        <tr><td><code class="inline">external_callback_url</code></td><td>url</td><td>Partner FHIR endpoint Dragon can call back to</td></tr>
+        <tr><td><code class="inline">encounter</code></td><td>object</td><td>Patient + Practitioner + Visit + Organization + Location</td></tr>
+        <tr><td><code class="inline">recordings</code></td><td>array</td><td>Audio artifacts (status, source, template, start/end)</td></tr>
+        <tr><td><code class="inline">sessions</code></td><td>array</td><td>DAX session + user + org IDs</td></tr>
+        <tr><td><code class="inline">transcript</code></td><td>object</td><td><code class="inline">speaker_count</code> + turns (speaker-segmented)</td></tr>
+        <tr><td><code class="inline">document</code></td><td>object</td><td>Optional unstructured narrative (e.g. referral letter)</td></tr>
+        <tr><td><code class="inline">resources</code></td><td>array</td><td>Polymorphic clinical objects (the meat of DSP)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Resource base shape</h2>
+  <p>Every resource inherits the same envelope and then layers type-specific fields:</p>
+<pre><code>{`{
+  "id": "condition-001",
+  "context": {                          // LOINC/SNOMED coding of the content type
+    "content_type": "condition",
+    "display_description": "Assessment Diagnoses",
+    "spoken_forms": ["encounter diagnoses"],
+    "codes": [{"system":"loinc","identifier":"51847-2"}]
+  },
+  "provenance": [11, 15, 17],           // transcript turn indices
+  "parent_reference": "enc-001",        // note: Condition uses 'parent_resource' (array); field name varies by resource
+  "child_references": ["plan-001"],     // note: Condition uses 'children_resources'
+  "source": { "type": "dragon_copilot", "id": "..." },
+  "confidence_score": 0.94,             // DSP 1.0: currently only on orders resources
+  // ...type-specific fields...
+}`}</code></pre>
+
+  <h2>Content types</h2>
+  <div class="grid cols-3">
+    <div class="card tight">
+      <span class="badge">document_section</span>
+      <p style="color:var(--muted); margin:6px 0 0">A narrative segment of a clinical note (e.g. HPI, A&amp;P).</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">condition</span>
+      <p style="color:var(--muted); margin:6px 0 0">Diagnoses / problems / symptoms with clinical + verification status, severity, stage.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.medication</span>
+      <p style="color:var(--muted); margin:6px 0 0">RxNorm drug, form, dosage, frequency, route, refills, dispense.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.laboratory</span>
+      <p style="color:var(--muted); margin:6px 0 0">LOINC lab + sample type + instructions.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.imaging</span>
+      <p style="color:var(--muted); margin:6px 0 0">Modality, body site, laterality, views, contrast.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.procedure</span>
+      <p style="color:var(--muted); margin:6px 0 0">CPT code, surgical team, devices, location.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.follow_up</span>
+      <p style="color:var(--muted); margin:6px 0 0">Return-in interval, PRN flag, approximation flag.</p>
+    </div>
+    <div class="card tight">
+      <span class="badge">order.referral</span>
+      <p style="color:var(--muted); margin:6px 0 0">Referral to specialty / provider (DSP docs exist but the dedicated page is private).</p>
+    </div>
+  </div>
+
+  <h2>Transcript model</h2>
+  <p>
+    The <code class="inline">transcript.turns[]</code> array numbers speaker turns sequentially.
+    <code class="inline">provenance</code> on any resource is simply a list of those indices,
+    anchoring each extracted fact back to the spoken source. This is one of the few DSP concepts
+    without a direct FHIR equivalent — see <a href="/dsp-fhir/gaps">Gaps</a>.
+  </p>
+
+  <h2>Versioning (<code class="inline">payload_version</code>)</h2>
+  <p>
+    Each encounter can produce multiple payloads as recordings accumulate, models refine,
+    or users edit. Versions carry <strong>major</strong> (session ordinal),
+    <strong>minor</strong> (coverage breadth), <strong>revision</strong> (model retry or edit;
+    user edits start at 1000), and a <strong>quality</strong> enum. This is sidecar metadata —
+    not resource content.
+  </p>
+
+  <div class="callout">
+    <strong>Mental model:</strong> DSP = an <em>encounter bundle</em> + <em>transcript sidecar</em>
+    + <em>versioning envelope</em>. That maps almost perfectly to a FHIR <code class="inline">Bundle</code>
+    with a <code class="inline">Composition</code> (or <code class="inline">DocumentReference</code>)
+    root, plus a small extension set for the envelope.
+  </div>
+</Layout>

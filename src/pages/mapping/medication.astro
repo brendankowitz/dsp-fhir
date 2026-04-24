@@ -1,0 +1,95 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Medication order" active="mapping">
+  <MapHeader
+    title="Medication order"
+    dspType="order.medication"
+    fhirResource="MedicationRequest (R4) + R5 renderedDosage (xver)"
+    summary="DSP medication orders land on MedicationRequest. DSP's free-text dosing narrative fits R5's renderedDosage better than R4's dosageInstruction.text — a good candidate for a cross-version extension."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: MEDICATION_ORDER</code></td><td><code class="inline">MedicationRequest</code> resource type</td><td></td></tr>
+        <tr><td><code class="inline">intent</code> (proposal/plan/order/...)</td><td><code class="inline">MedicationRequest.intent</code></td><td>Direct valueset match.</td></tr>
+        <tr><td><code class="inline">description</code></td><td><code class="inline">dosageInstruction.text</code>; also cross-version extension <code class="inline">renderedDosageInstruction</code> (R5 xver)</td><td>Free-text "Chantix 0.5 mg, take one a day for 3 days, then twice a day".</td></tr>
+        <tr><td><code class="inline">reason</code> (string)</td><td><code class="inline">reasonCode.text</code></td><td></td></tr>
+        <tr><td><code class="inline">reason_references</code></td><td><code class="inline">reasonReference[]</code> → Condition / Observation</td><td></td></tr>
+        <tr><td><code class="inline">order_data.medication</code> (RxNorm)</td><td><code class="inline">medicationCodeableConcept</code></td><td>Or <code class="inline">medicationReference</code> → <code class="inline">Medication</code> for compound drugs.</td></tr>
+        <tr><td><code class="inline">order_data.form</code></td><td><code class="inline">Medication.form</code> or <code class="inline">dosageInstruction.method</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.dosage</code> + <code class="inline">dosage_unit</code></td><td><code class="inline">dosageInstruction.doseAndRate.doseQuantity</code></td><td>UCUM units required.</td></tr>
+        <tr><td><code class="inline">order_data.frequency</code></td><td><code class="inline">dosageInstruction.timing.repeat</code></td><td><code class="inline">count</code>→frequency, <code class="inline">period</code>/<code class="inline">period_unit</code>→period/periodUnit; <code class="inline">prn</code>→<code class="inline">asNeededBoolean</code>.</td></tr>
+        <tr><td><code class="inline">order_data.frequency.text</code></td><td><code class="inline">dosageInstruction.text</code></td><td>Keep the narrative; structured fields are best-effort.</td></tr>
+        <tr><td><code class="inline">order_data.duration</code></td><td><code class="inline">dosageInstruction.timing.repeat.bounds[x]</code></td><td><code class="inline">boundsDuration</code> with UCUM unit.</td></tr>
+        <tr><td><code class="inline">order_data.route</code> + <code class="inline">route_coded</code></td><td><code class="inline">dosageInstruction.route</code></td><td>Bind to NCIT or SNOMED CT route codes.</td></tr>
+        <tr><td><code class="inline">order_data.refills</code></td><td><code class="inline">dispenseRequest.numberOfRepeatsAllowed</code></td><td></td></tr>
+        <tr><td><code class="inline">order_data.dispense</code></td><td><code class="inline">dispenseRequest.quantity</code></td><td>"56" tablets.</td></tr>
+        <tr><td><code class="inline">order_data.discontinue</code> / <code class="inline">discontinue_date</code></td><td><code class="inline">status = stopped</code> + <code class="inline">statusReason</code> (R4 native) + <code class="inline">meta.lastUpdated</code> for the date</td><td>Or represent via a new <code class="inline">MedicationRequest</code> with intent=order and status=stopped.</td></tr>
+        <tr><td><code class="inline">order_data.notes</code></td><td><code class="inline">note.text</code></td><td></td></tr>
+        <tr><td><code class="inline">confidence_score</code></td><td>DSP extension <code class="inline">confidence-score</code></td><td>No native request-side element in R4 or R5. The IG defines <code class="inline">confidence-score</code> as a new extension; R5's grading pattern from <code class="inline">Evidence.certainty</code> informs its valueset.</td></tr>
+        <tr><td><code class="inline">update_status</code></td><td><code class="inline">meta.versionId</code> + <code class="inline">Provenance.activity</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "med-001",
+  "type": "MEDICATION_ORDER",
+  "intent": "order",
+  "description": "Chantix 0.5 mg, take one a day for 3 days, then twice a day",
+  "reason": "Smoking cessation",
+  "order_data": {
+    "medication": { "text":"Chantix",
+      "codes":[{"system":"rxnorm","code":"1000048"}]},
+    "form": "tablet",
+    "dosage": "0.5", "dosage_unit":"mg",
+    "frequency": {"count":1,"period":1,"period_unit":"d","prn":false},
+    "route_coded": {"codes":[{"system":"NCIT","code":"C38288"}]},
+    "refills":"5","dispense":"56"
+  },
+  "confidence_score": 1.0
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"MedicationRequest",
+  "status":"active","intent":"order",
+  "medicationCodeableConcept":{
+    "coding":[{"system":"http://www.nlm.nih.gov/research/umls/rxnorm","code":"1000048"}],
+    "text":"Chantix"
+  },
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "reasonCode":[{"text":"Smoking cessation"}],
+  "dosageInstruction":[{
+    "text":"Chantix 0.5 mg, take one a day for 3 days, then twice a day",
+    "timing":{"repeat":{"frequency":1,"period":1,"periodUnit":"d"}},
+    "asNeededBoolean":false,
+    "route":{"coding":[{"system":"http://ncithesaurus.nci.nih.gov","code":"C38288","display":"Oral"}]},
+    "doseAndRate":[{"doseQuantity":{"value":0.5,"unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}}]
+  }],
+  "dispenseRequest":{"numberOfRepeatsAllowed":5,"quantity":{"value":56,"unit":"tablet"}},
+  "extension":[{
+    "url":"https://dsp-fhir.org/StructureDefinition/confidence-score",
+    "valueDecimal":1.0
+  }]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>R5 xver benefit:</strong> <code class="inline">MedicationRequest.renderedDosageInstruction</code>
+    in R5 is an explicit string for exactly what DSP's <code class="inline">description</code> carries.
+    Publish it as a cross-version extension on R4 instead of overloading <code class="inline">dosageInstruction.text</code>.
+  </div>
+</Layout>

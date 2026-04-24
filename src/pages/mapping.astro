@@ -1,0 +1,135 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Resource mapping catalog" active="mapping">
+  <h1>DSP ↔ FHIR resource mapping</h1>
+  <p class="lead">
+    Every DSP concept, its FHIR home (R4 unless noted), and the delta that requires an extension
+    or a cross-version borrow.
+  </p>
+
+  <h2>Envelope</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">payload_version</code></td><td><code class="inline">Bundle.meta.tag</code> + DSP extension</td><td>4-part version (major/minor/revision/quality) encoded as structured extension.</td></tr>
+        <tr><td><code class="inline">priority</code></td><td><code class="inline">Encounter.priority</code> (R4 native) for encounter-scope; DSP extension on <code class="inline">Bundle</code> if truly envelope-scope</td><td>Bound to <code class="inline">request-priority</code> (routine/urgent/asap/stat).</td></tr>
+        <tr><td><code class="inline">external_callback_url</code></td><td>Extension <code class="inline">dsp-external-callback-url</code></td><td>Carried on Encounter; consumed by Dragon's <code class="inline">SubscriptionTopic</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Encounter block</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">encounter.date_of_encounter</code></td><td><code class="inline">Encounter.period</code></td><td>ISO 8601.</td></tr>
+        <tr><td><code class="inline">encounter.status</code></td><td><code class="inline">Encounter.status</code></td><td>Map planned/in_progress/complete/cancelled to R4 codes.</td></tr>
+        <tr><td><code class="inline">encounter.external_encounter_ids</code></td><td><code class="inline">Encounter.identifier</code></td><td><code class="inline">type</code> → Identifier.type.</td></tr>
+        <tr><td><code class="inline">encounter.correlation_id</code></td><td><code class="inline">Encounter.identifier</code> (system=DAX)</td><td></td></tr>
+        <tr><td><code class="inline">patient.medical_record_number</code></td><td><code class="inline">Patient.identifier</code> (type=MR)</td><td></td></tr>
+        <tr><td><code class="inline">patient.name/gender/birthdate/age</code></td><td><code class="inline">Patient</code></td><td><code class="inline">age</code> is derived in FHIR; carry via extension if preserving source-reported.</td></tr>
+        <tr><td><code class="inline">patient.gender_identity</code> / <code class="inline">pronoun_preference</code></td><td>US Core extensions (<code class="inline">genderIdentity</code>, <code class="inline">pronouns</code>)</td><td></td></tr>
+        <tr><td><code class="inline">practitioner.npi</code></td><td><code class="inline">Practitioner.identifier</code> (system=<code class="inline">http://hl7.org/fhir/sid/us-npi</code>)</td><td></td></tr>
+        <tr><td><code class="inline">practitioner.qualifications/specialties/roles</code></td><td><code class="inline">Practitioner.qualification</code> + <code class="inline">PractitionerRole</code></td><td></td></tr>
+        <tr><td><code class="inline">visit.visit_type</code></td><td><code class="inline">Encounter.class</code> + <code class="inline">type</code></td><td></td></tr>
+        <tr><td><code class="inline">visit.admission_date/discharge_date</code></td><td><code class="inline">Encounter.period.start/end</code></td><td></td></tr>
+        <tr><td><code class="inline">visit.reason</code></td><td><code class="inline">Encounter.reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+        <tr><td><code class="inline">visit.location</code></td><td><code class="inline">Encounter.location</code> → <code class="inline">Location</code></td><td></td></tr>
+        <tr><td><code class="inline">visit.accompanied_by</code></td><td><code class="inline">Encounter.participant</code> with role=accompanying</td><td>Or <code class="inline">RelatedPerson</code>.</td></tr>
+        <tr><td><code class="inline">organization_id</code> (on <code class="inline">encounter</code>)</td><td>Extension <code class="inline">dsp-tenant-organization</code> on <code class="inline">Encounter</code></td><td>This is the Nuance/MSFT tenant org UUID, not a clinical organization. Distinct from <code class="inline">Encounter.serviceProvider</code>.</td></tr>
+        <tr><td>Clinical organization (if distinct)</td><td><code class="inline">Encounter.serviceProvider</code> → <code class="inline">Organization</code></td><td>Populate when DSP provides the delivering facility/practice.</td></tr>
+        <tr><td><code class="inline">recording_locales</code> / <code class="inline">timezone</code></td><td>Extensions on <code class="inline">Encounter</code></td><td>Locale maps to <code class="inline">Composition.language</code> for the document.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Recordings, sessions, transcript</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">recordings[]</code></td><td><code class="inline">Media</code> + <code class="inline">DocumentReference</code></td><td><code class="inline">Media.createdPeriod</code>, <code class="inline">Media.content.url</code>.</td></tr>
+        <tr><td><code class="inline">sessions[]</code></td><td><code class="inline">Provenance</code> with <code class="inline">agent</code> (user, org) and <code class="inline">activity</code>=DAX</td><td></td></tr>
+        <tr><td><code class="inline">transcript.turns[]</code></td><td><code class="inline">DocumentReference</code> JSON attachment (structured)</td><td>Integer turn indices preserved; see <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
+        <tr><td><code class="inline">transcript.speaker_count</code></td><td>Extension on <code class="inline">DocumentReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Document</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">document</code> (unstructured)</td><td><code class="inline">DocumentReference</code> with attachment</td><td></td></tr>
+        <tr><td><code class="inline">document</code> (structured)</td><td><code class="inline">Composition</code> with sections</td><td>Each <code class="inline">document_section</code> resource becomes a <code class="inline">Composition.section</code>.</td></tr>
+        <tr><td><code class="inline">document_status</code></td><td><code class="inline">Composition.status</code> / <code class="inline">DocumentReference.status</code> + <code class="inline">docStatus</code></td><td>Map <code class="inline">final_signed</code>→<code class="inline">final</code>+<code class="inline">docStatus=final</code>.</td></tr>
+        <tr><td><code class="inline">document_type</code></td><td><code class="inline">Composition.type</code> (LOINC)</td><td></td></tr>
+        <tr><td><code class="inline">report_locale</code></td><td><code class="inline">Composition.language</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Resources (clinical types)</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP content_type</th><th>FHIR resource</th><th>Profile lives at</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">document_section</code> (HPI, Overview, A&amp;P, …)</td><td><code class="inline">Composition.section</code></td><td><a href="/dsp-fhir/mapping/document-section">/mapping/document-section</a></td></tr>
+        <tr><td><code class="inline">condition</code></td><td><code class="inline">Condition</code></td><td><a href="/dsp-fhir/mapping/condition">/mapping/condition</a></td></tr>
+        <tr><td><code class="inline">order.medication</code></td><td><code class="inline">MedicationRequest</code></td><td><a href="/dsp-fhir/mapping/medication">/mapping/medication</a></td></tr>
+        <tr><td><code class="inline">order.laboratory</code></td><td><code class="inline">ServiceRequest</code> (category=laboratory)</td><td><a href="/dsp-fhir/mapping/lab">/mapping/lab</a></td></tr>
+        <tr><td><code class="inline">order.imaging</code></td><td><code class="inline">ServiceRequest</code> (category=imaging)</td><td><a href="/dsp-fhir/mapping/imaging">/mapping/imaging</a></td></tr>
+        <tr><td><code class="inline">order.procedure</code></td><td><code class="inline">ServiceRequest</code> (category=procedure)</td><td><a href="/dsp-fhir/mapping/procedure">/mapping/procedure</a></td></tr>
+        <tr><td><code class="inline">order.referral</code></td><td><code class="inline">ServiceRequest</code> (intent=plan, category=referral)</td><td><a href="/dsp-fhir/mapping/referral">/mapping/referral</a></td></tr>
+        <tr><td><code class="inline">order.follow_up</code></td><td><code class="inline">ServiceRequest</code> (category=follow-up) + <code class="inline">Appointment</code> (optional)</td><td><a href="/dsp-fhir/mapping/follow-up">/mapping/follow-up</a></td></tr>
+        <tr><td><code class="inline">order.dietary</code></td><td><code class="inline">NutritionOrder</code></td><td><a href="/dsp-fhir/mapping/dietary">/mapping/dietary</a></td></tr>
+        <tr><td><code class="inline">order.immunization</code></td><td><code class="inline">ImmunizationRecommendation</code> (proposed) / <code class="inline">Immunization</code> (administered)</td><td><a href="/dsp-fhir/mapping/immunization">/mapping/immunization</a></td></tr>
+        <tr><td><code class="inline">order.device</code></td><td><code class="inline">DeviceRequest</code> (+ <code class="inline">Device</code>/<code class="inline">DeviceUseStatement</code> downstream)</td><td><a href="/dsp-fhir/mapping/device">/mapping/device</a></td></tr>
+        <tr><td><code class="inline">order.therapy</code></td><td><code class="inline">ServiceRequest</code> (category=therapy) + optional <code class="inline">Goal</code></td><td><a href="/dsp-fhir/mapping/therapy">/mapping/therapy</a></td></tr>
+        <tr><td><code class="inline">order.activity</code></td><td><code class="inline">CarePlan.activity</code> (preferred) or <code class="inline">ServiceRequest</code> (category=activity)</td><td><a href="/dsp-fhir/mapping/activity">/mapping/activity</a></td></tr>
+        <tr><td><code class="inline">order.study</code></td><td><code class="inline">ServiceRequest</code> (category=study) <em>or</em> <code class="inline">ResearchSubject</code>+<code class="inline">ResearchStudy</code></td><td><a href="/dsp-fhir/mapping/study">/mapping/study</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Cross-cutting resource fields</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">context.codes</code></td><td><code class="inline">.code</code> or <code class="inline">.category</code> CodeableConcept</td><td>LOINC/SNOMED.</td></tr>
+        <tr><td><code class="inline">context.display_description</code> (localized)</td><td><code class="inline">Coding.display</code> + <code class="inline">translation</code> extension</td><td>Per-locale labels.</td></tr>
+        <tr><td><code class="inline">context.spoken_forms</code></td><td>DSP extension <code class="inline">spoken-forms</code></td><td>Not a native FHIR concept.</td></tr>
+        <tr><td><code class="inline">provenance: [turn indices]</code></td><td><code class="inline">Provenance.entity.what</code> + DSP extension for integer refs</td><td>See <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
+        <tr><td><code class="inline">confidence_score</code></td><td>DSP extension <code class="inline">confidence-score</code>; applicable only where DSP populates it (orders in 1.0)</td><td>0..1 decimal. Context is "any Resource" so the extension is tolerant of future expansion beyond orders.</td></tr>
+        <tr><td><code class="inline">source.type</code></td><td><code class="inline">Provenance.agent.type</code></td><td><code class="inline">dragon_copilot</code> / <code class="inline">ehr_integration</code> / <code class="inline">extension</code>.</td></tr>
+        <tr><td><code class="inline">parent_reference</code> / <code class="inline">child_references</code></td><td>Resource-specific reference (<code class="inline">basedOn</code>, <code class="inline">partOf</code>, <code class="inline">reasonReference</code>)</td><td>Slot into the semantically correct field per resource type.</td></tr>
+        <tr><td><code class="inline">update_status</code></td><td><code class="inline">meta.versionId</code> + <code class="inline">Provenance.activity</code></td><td>NEW = no prior version; UPDATED = new version; DELETED = <code class="inline">DELETE</code> transaction.</td></tr>
+        <tr><td><code class="inline">search_terms</code></td><td>DSP extension or <code class="inline">CodeableConcept.text</code> synonyms</td><td>Not clinical; kept as hint metadata.</td></tr>
+        <tr><td><code class="inline">external_reference</code></td><td><code class="inline">identifier</code> + <code class="inline">meta.source</code></td><td><code class="inline">linkage_confidence</code> → DSP extension.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:30px">
+    Deep-dive pages: 
+    <a href="/dsp-fhir/mapping/condition">Condition</a> ·
+    <a href="/dsp-fhir/mapping/medication">Medication</a> ·
+    <a href="/dsp-fhir/mapping/lab">Lab</a> ·
+    <a href="/dsp-fhir/mapping/imaging">Imaging</a> ·
+    <a href="/dsp-fhir/mapping/procedure">Procedure</a> ·
+    <a href="/dsp-fhir/mapping/referral">Referral</a> ·
+    <a href="/dsp-fhir/mapping/follow-up">Follow-up</a> ·
+    <a href="/dsp-fhir/mapping/dietary">Dietary</a> ·
+    <a href="/dsp-fhir/mapping/immunization">Immunization</a> ·
+    <a href="/dsp-fhir/mapping/device">Device</a> ·
+    <a href="/dsp-fhir/mapping/therapy">Therapy</a> ·
+    <a href="/dsp-fhir/mapping/activity">Activity</a> ·
+    <a href="/dsp-fhir/mapping/study">Study</a> ·
+    <a href="/dsp-fhir/mapping/document-section">Document section</a>
+  </p>
+</Layout>

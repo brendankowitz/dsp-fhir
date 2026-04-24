@@ -1,0 +1,134 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="R4 vs R5 vs R6 — evaluation" active="eval">
+  <h1>Which FHIR version should DSP sit on?</h1>
+  <p class="lead">
+    Three axes matter: <strong>deployment reality</strong> (what EHRs actually speak),
+    <strong>conceptual fit</strong> (which version has the cleanest resources for DSP's shape),
+    and <strong>transport capability</strong> (Subscriptions, <code class="inline">$graphql</code>,
+    callbacks).
+  </p>
+
+  <h2>Matrix</h2>
+  <div class="card" style="padding:0; overflow:hidden">
+    <table>
+      <thead>
+        <tr><th>Dimension</th><th>R4 (4.0.1, 2019)</th><th>R5 (5.0.0, 2023)</th><th>R6 (ballot, 2025+)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>EHR deployment</td>
+          <td><span class="badge ok">Universal</span> Epic, Oracle Health, Meditech, Athena, Veradigm, etc.</td>
+          <td><span class="badge warn">Sparse</span> Mostly reference servers; no tier-1 EHR endpoint exposes R5 natively.</td>
+          <td><span class="badge bad">None</span> Pre-normative.</td>
+        </tr>
+        <tr>
+          <td>Regulatory alignment (US)</td>
+          <td><span class="badge ok">HTI-1 / USCDI v3 / CMS-9115-F</span></td>
+          <td><span class="badge warn">Not required</span></td>
+          <td><span class="badge bad">N/A</span></td>
+        </tr>
+        <tr>
+          <td>US Core IG</td>
+          <td>6.x / 7.x — mature</td>
+          <td>Separate R5 IG in development; lags R4 branch</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td><code class="inline">MedicationRequest</code> fidelity</td>
+          <td>Good; dose/timing in <code class="inline">dosageInstruction</code>; <code class="inline">statusReason</code> exists</td>
+          <td><span class="badge ok">Better</span> — <code class="inline">renderedDosageInstruction</code>, richer <code class="inline">Ingredient</code>/<code class="inline">ClinicalUseDefinition</code>, improved substitution</td>
+          <td>Iterative polish</td>
+        </tr>
+        <tr>
+          <td><code class="inline">ServiceRequest</code> (labs/imaging/procedure/referral)</td>
+          <td>Single unified resource since R4</td>
+          <td>Minor refinements</td>
+          <td>Minor refinements</td>
+        </tr>
+        <tr>
+          <td>Certainty / confidence on <em>requests</em></td>
+          <td>Extension-only (no native field on <code class="inline">MedicationRequest</code>/<code class="inline">ServiceRequest</code>/<code class="inline">Condition</code>)</td>
+          <td>Still extension-only for request resources; <code class="inline">Evidence.certainty</code> exists but is for EBM, not DSP orders</td>
+          <td>Likely expanded</td>
+        </tr>
+        <tr>
+          <td>Subscriptions (for DSP callbacks)</td>
+          <td>R4 has legacy Subscription; R4B adds topic-based (backport)</td>
+          <td><span class="badge ok">First-class</span> <code class="inline">SubscriptionTopic</code> + <code class="inline">Subscription</code></td>
+          <td>Normative track</td>
+        </tr>
+        <tr>
+          <td><code class="inline">$graphql</code> operation</td>
+          <td>Defined; read-only in practice</td>
+          <td><span class="badge ok">Expanded</span> — mutation via <code class="inline">Parameters</code> proposals, better tooling</td>
+          <td>Continuing</td>
+        </tr>
+        <tr>
+          <td>Cross-version extensions</td>
+          <td>Consumer: uses R5/R6 elements as xver extensions (mature pattern)</td>
+          <td>Producer: emit R5 elements natively</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>Tooling (validators, IG publisher, profile renderers)</td>
+          <td><span class="badge ok">Excellent</span></td>
+          <td>Good and improving</td>
+          <td><span class="badge warn">Unstable</span></td>
+        </tr>
+        <tr>
+          <td>Ballot stability</td>
+          <td><span class="badge ok">Normative for core infra resources</span></td>
+          <td>STU</td>
+          <td><span class="badge bad">Pre-ballot / early ballot</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Verdict</h2>
+  <div class="card">
+    <p style="margin-top:0">
+      <span class="badge ok">Recommendation</span>
+      <strong>Anchor DSP-FHIR at R4, borrow from R5 selectively via cross-version extensions,
+      treat R6 as directional input into the IG's profile design.</strong>
+    </p>
+    <p>Why this wins on all three axes:</p>
+    <ul class="clean">
+      <li><strong>Deployment reality:</strong> Every partner EHR already speaks R4. Dragon's
+        <code class="inline">external_callback_url</code> will land on an R4 endpoint in the real world. Picking R5/R6 forces translators on day one.</li>
+      <li><strong>Conceptual fit:</strong> R4's <code class="inline">Encounter</code>, <code class="inline">Condition</code>,
+        <code class="inline">MedicationRequest</code>, <code class="inline">ServiceRequest</code>, <code class="inline">Composition</code>,
+        <code class="inline">DocumentReference</code>, <code class="inline">Provenance</code> cover ≈90% of DSP directly. The 10% gap is extension territory either way.</li>
+      <li><strong>Transport:</strong> R4 + R4B topic-based Subscription + <code class="inline">$graphql</code> is enough for DSP's callback and projection patterns. R5's stronger <code class="inline">SubscriptionTopic</code> can be referenced in the IG but not required.</li>
+    </ul>
+    <p style="margin-bottom:0">
+      The cost of R5 is broken EHR integration. The benefit of R5 (certainty, nicer medication model)
+      is recoverable in R4 via <a href="https://hl7.org/fhir/R4/versions.html#extensions">cross-version extensions</a>. The asymmetry is clear.
+    </p>
+  </div>
+
+  <h2>Where R5 earns its keep</h2>
+  <p>Even with R4 as the base, these R5 elements are worth promoting to DSP-FHIR extensions:</p>
+  <ul class="clean">
+    <li><code class="inline">MedicationRequest.renderedDosageInstruction</code> (R5) → cleanly holds DSP's free-text "take one a day for 3 days, then twice a day".</li>
+    <li>R5 <code class="inline">Ingredient</code> / <code class="inline">ClinicalUseDefinition</code> — richer representation for compound medications and substitution rules.</li>
+    <li>R5's pattern for grading uncertainty (used by <code class="inline">Evidence.certainty</code>) — informs the valueset for DSP's <code class="inline">confidence-score</code> extension even though no request-side element exists.</li>
+    <li><code class="inline">SubscriptionTopic</code> — formalizes Dragon's callback contract with partners.</li>
+    <li><code class="inline">Condition.stage.assessment</code> richer cardinality.</li>
+  </ul>
+
+  <h2>Where R6 earns its keep (forward-looking)</h2>
+  <ul class="clean">
+    <li>Continuing cleanup of narrative/structured boundary in <code class="inline">Composition</code> — relevant for DSP's document_section / structured-resources split.</li>
+    <li>Expanded <code class="inline">ActorDefinition</code> / role modeling — DSP's <code class="inline">practitioner.roles</code> and accompanied_by become cleaner.</li>
+    <li>Better GraphQL/query-parameter profiling — useful when publishing the DSP canonical <code class="inline">$graphql</code> query as part of the IG.</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong>Do not wait for R6.</strong> By the time R6 is normative and adopted, DSP will have
+    shipped many revisions. The IG should be authored against R4 today, with a documented
+    migration path as R5/R6 become deployment-relevant.
+  </div>
+</Layout>

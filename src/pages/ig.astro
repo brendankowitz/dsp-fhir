@@ -1,0 +1,173 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="DSP-FHIR Implementation Guide outline" active="ig">
+  <h1>DSP-FHIR IG — outline</h1>
+  <p class="lead">
+    The IG packages the mapping decisions into a shippable, validatable artifact: profiles that
+    constrain R4 resources for DSP, extensions for the gaps, value sets for the enumerated DSP
+    fields, and a canonical <code class="inline">$graphql</code> query that is the DSP contract.
+  </p>
+
+  <h2>IG metadata</h2>
+  <ul class="clean">
+    <li><strong>Canonical:</strong> <code class="inline">https://dsp-fhir.org/ImplementationGuide/dsp-fhir</code></li>
+    <li><strong>FHIR version:</strong> 4.0.1 (R4) — core</li>
+    <li><strong>Cross-version dependencies:</strong> <code class="inline">hl7.fhir.uv.extensions.r5</code>, <code class="inline">hl7.fhir.uv.xver-r5.r4</code></li>
+    <li><strong>US Core:</strong> 7.0.0 — derive where USCDI v3 profiles apply (Patient, Practitioner, Encounter, Condition, MedicationRequest, ServiceRequest, DocumentReference)</li>
+    <li><strong>Publishing:</strong> HL7 IG Publisher, FSH (fsh-sushi)</li>
+  </ul>
+
+  <h2>Profiles</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>Profile</th><th>Base</th><th>Key constraints</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">DspEncounter</code></td><td>US Core Encounter</td><td>+ <code class="inline">payload-version</code>, <code class="inline">external-callback-url</code>, <code class="inline">recording-locale</code>, <code class="inline">timezone</code> extensions.</td></tr>
+        <tr><td><code class="inline">DspPatient</code></td><td>US Core Patient</td><td>Must-support MRN; reuse USCDI genderIdentity/pronouns. (NPI is a Practitioner identifier, not a Patient one.)</td></tr>
+        <tr><td><code class="inline">DspPractitioner</code></td><td>US Core Practitioner</td><td>Must-support NPI via <code class="inline">identifier</code> system <code class="inline">http://hl7.org/fhir/sid/us-npi</code>; qualification VS from HL7 v2-0360.</td></tr>
+        <tr><td><code class="inline">DspComposition</code></td><td>Composition (optionally bound to US Core Clinical Notes conventions via <code class="inline">type</code>)</td><td>Section slicing for common DSP sections (HPI, ROS, A&amp;P, Plan). Companion <code class="inline">DspDocumentReference</code> profile handles the addressable wrapper.</td></tr>
+        <tr><td><code class="inline">DspCondition</code></td><td>US Core Condition-Encounter-Diagnosis / Problems</td><td>+ <code class="inline">spoken-forms</code>, <code class="inline">transcript-turn-refs</code>, <code class="inline">confidence-score</code>.</td></tr>
+        <tr><td><code class="inline">DspMedicationRequest</code></td><td>US Core MedicationRequest</td><td>+ <code class="inline">rendered-dosage-instruction</code> (R5 xver), <code class="inline">confidence-score</code>.</td></tr>
+        <tr><td><code class="inline">DspServiceRequest-Lab</code></td><td>US Core ServiceRequest (Lab)</td><td>+ <code class="inline">abbreviation</code>.</td></tr>
+        <tr><td><code class="inline">DspServiceRequest-Imaging</code></td><td>ServiceRequest</td><td>+ <code class="inline">imaging-modality</code>, <code class="inline">imaging-views</code>, <code class="inline">imaging-contrast</code>, <code class="inline">bodysite-laterality</code>.</td></tr>
+        <tr><td><code class="inline">DspServiceRequest-Procedure</code></td><td>ServiceRequest</td><td>+ <code class="inline">procedure-devices</code>.</td></tr>
+        <tr><td><code class="inline">DspServiceRequest-Referral</code></td><td>ServiceRequest</td><td>category=referral; performerType required.</td></tr>
+        <tr><td><code class="inline">DspServiceRequest-FollowUp</code></td><td>ServiceRequest</td><td>+ <code class="inline">return-in</code> Duration, <code class="inline">approximation</code>, <code class="inline">prn</code>.</td></tr>
+        <tr><td><code class="inline">DspDocumentReference-Transcript</code></td><td>DocumentReference</td><td>JSON attachment with structured turn array; <code class="inline">speaker-count</code> extension.</td></tr>
+        <tr><td><code class="inline">DspMedia-Recording</code></td><td>Media</td><td>Audio content; <code class="inline">recording-source</code> (DAXAPP/DAXKIT/…) extension.</td></tr>
+        <tr><td><code class="inline">DspProvenance</code></td><td>Provenance</td><td>Agent: Dragon Copilot / EHR integration / extension; activity coded.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Extensions</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>Extension</th><th>Context</th><th>Type</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">payload-version</code></td><td>Encounter / Bundle</td><td>Complex: <code class="inline">major</code>, <code class="inline">minor</code>, <code class="inline">revision</code>, <code class="inline">quality</code>, <code class="inline">metadata</code> (key/value).</td></tr>
+        <tr><td><code class="inline">external-callback-url</code></td><td>Encounter</td><td><code class="inline">valueUrl</code></td></tr>
+        <tr><td><code class="inline">spoken-forms</code></td><td>Any Resource / Composition.section</td><td>Repeating <code class="inline">valueString</code> (form).</td></tr>
+        <tr><td><code class="inline">transcript-turn-refs</code></td><td>Any Resource</td><td>Repeating <code class="inline">valueInteger</code> (turn index) + optional <code class="inline">valueReference</code> to DocumentReference#turn.</td></tr>
+        <tr><td><code class="inline">confidence-score</code></td><td>Any Resource</td><td><code class="inline">valueDecimal</code> 0..1.</td></tr>
+        <tr><td><code class="inline">recording-locale</code> / <code class="inline">timezone</code></td><td>Encounter</td><td><code class="inline">valueCode</code> / <code class="inline">valueString</code>.</td></tr>
+        <tr><td><code class="inline">imaging-modality</code> / <code class="inline">imaging-views</code> / <code class="inline">imaging-contrast</code></td><td>ServiceRequest</td><td>Coded / string / code.</td></tr>
+        <tr><td><code class="inline">bodysite-laterality</code></td><td>CodeableConcept (bodySite)</td><td><code class="inline">valueCode</code>: right / left / bilateral / unilateral.</td></tr>
+        <tr><td><code class="inline">return-in</code></td><td>ServiceRequest (follow-up)</td><td><code class="inline">valueDuration</code>.</td></tr>
+        <tr><td><code class="inline">approximation</code></td><td>Duration</td><td><code class="inline">valueBoolean</code>.</td></tr>
+        <tr><td><code class="inline">procedure-devices</code></td><td>ServiceRequest</td><td>Repeating <code class="inline">valueString</code> (device).</td></tr>
+        <tr><td><code class="inline">rendered-dosage-instruction</code></td><td>MedicationRequest</td><td>R5 xver → <code class="inline">valueString</code>.</td></tr>
+        <tr><td><code class="inline">linkage-confidence</code></td><td>Any resource</td><td>Complex: score + level.</td></tr>
+        <tr><td><code class="inline">concept-id</code></td><td>CodeableConcept</td><td><code class="inline">valueString</code> — Dragon internal concept identity.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>ValueSets / CodeSystems</h2>
+  <ul class="clean">
+    <li><code class="inline">DspOrderCategory</code> — <code class="inline">follow-up</code>, <code class="inline">referral</code>, and aliases mapped to SNOMED.</li>
+    <li><code class="inline">DspResourceSource</code> — <code class="inline">dragon_copilot</code>, <code class="inline">ehr_integration</code>, <code class="inline">extension</code>.</li>
+    <li><code class="inline">DspRecordingSource</code> — <code class="inline">DAXAPP</code>, <code class="inline">DAXKIT.haiku</code>, <code class="inline">DAXKIT.teams</code>, <code class="inline">PMM</code>.</li>
+    <li><code class="inline">DspPayloadQuality</code> — the 5-value quality enum.</li>
+    <li><code class="inline">DspSpeakerRole</code> — <code class="inline">clinician</code>, <code class="inline">other</code>.</li>
+  </ul>
+
+  <h2>Operations &amp; transport</h2>
+  <div class="card">
+    <ul class="clean">
+      <li><strong>Read:</strong> canonical <code class="inline">$graphql</code> query published as an IG artifact (see <a href="/dsp-fhir/graphql">graphql</a>), with <code class="inline">Encounter/$everything</code> and REST <code class="inline">_include</code> as documented fallbacks. IPS <code class="inline">Patient/$summary</code> is the spiritual ancestor of the canonical query — adopters should read both.</li>
+      <li><strong>Write:</strong> <code class="inline">transaction</code> Bundle at <code class="inline">POST [fhir-base]</code>; entries carry <code class="inline">ifMatch</code> for optimistic concurrency and <code class="inline">Provenance</code>. <code class="inline">$validate</code> (against IG profiles) SHOULD be run pre-commit.</li>
+      <li><strong>Standard ops the IG relies on:</strong> <code class="inline">$validate</code>, <code class="inline">Encounter/$everything</code>, <code class="inline">CodeSystem/$lookup</code>, <code class="inline">ValueSet/$expand</code>, <code class="inline">PlanDefinition/$apply</code> / <code class="inline">ActivityDefinition/$apply</code>, <code class="inline">Patient/$match</code> (and IG-profiled <code class="inline">RelatedPerson/$match</code>), <code class="inline">Composition/$document</code>, US Core <code class="inline">$docref</code>, Bulk Data <code class="inline">$export?_since=</code>. See <a href="/dsp-fhir/operations">operations</a> for the full audit and worked examples.</li>
+      <li><strong>Push:</strong> <code class="inline">SubscriptionTopic</code> (R4B/R5) <code class="inline">https://dsp-fhir.org/SubscriptionTopic/dsp-ready</code> triggers on encounter finalization; payload URL fires the canonical query. Use Subscription R5 Backport <code class="inline">$events</code> / <code class="inline">$status</code> for replay and liveness.</li>
+      <li><strong>Callbacks:</strong> <code class="inline">external_callback_url</code> is the partner-supplied endpoint. The DSP spec does not prescribe an auth scheme; the IG recommends <a href="https://www.hl7.org/fhir/smart-app-launch/backend-services.html">SMART on FHIR Backend Services</a> (client-credentials with a signed JWT), mirroring Bulk Data conventions.</li>
+      <li><strong>Custom operations:</strong> only one — <code class="inline">$ground</code> (transcript turn-join). Everything else previously drafted as a custom op resolved to an existing FHIR or IG operation. See <a href="/dsp-fhir/operations">operations</a>.</li>
+    </ul>
+  </div>
+
+  <h2 id="normative-rules">Normative rules (the load-bearing ones)</h2>
+  <p class="lead">
+    These are the rules that protect DSP semantics from silently drifting. Unlike the
+    operations page — which is all optional — these are <strong>SHALL</strong>.
+  </p>
+
+  <div class="card">
+    <h3>R1 · Transcript turn-index stability</h3>
+    <p>
+      Turn indices <strong>SHALL</strong> be immutable within a
+      <code class="inline">DocumentReference.meta.versionId</code> of the transcript. A
+      re-transcription (correction, alternate model, redaction) <strong>SHALL</strong> create a
+      new version of the <code class="inline">DocumentReference</code>. Any clinical resource
+      carrying <code class="inline">transcript-turn-refs</code> <strong>SHALL</strong> either
+      (a) reference the specific transcript version
+      (<code class="inline">DocumentReference/xyz/_history/3</code>), or (b) be re-emitted with
+      updated indices against the new transcript version.
+    </p>
+    <p>
+      <strong>Why:</strong> without this rule, integer turn-refs can silently point to
+      different content after a transcript revision. Grounding becomes unprovable. This is
+      the only DSP semantic that cannot survive naively.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>R2 · Recording content binding</h3>
+    <p>
+      Recordings <strong>SHALL</strong> be served from a FHIR
+      <code class="inline">Binary</code> endpoint on the same server that issued the
+      <code class="inline">Media</code> / <code class="inline">DocumentReference</code> resource,
+      and that endpoint <strong>SHALL</strong> enforce SMART on FHIR scopes appropriate to the
+      recording's patient compartment. External signed URLs (e.g. CDN hand-offs) are
+      permitted only via a server-issued redirect that validates the caller's token first.
+    </p>
+    <p>
+      <strong>Why:</strong> PHI-bearing audio sitting behind a stable public URL is a data
+      breach waiting to happen. The rule keeps recording access within the auth boundary the
+      rest of the resources already live in.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>R3 · Payload-version negotiation</h3>
+    <p>
+      Servers <strong>SHALL</strong> advertise accepted and emitted DSP
+      <code class="inline">payload-version</code> values in
+      <code class="inline">CapabilityStatement</code> via the
+      <a href="/dsp-fhir/operations#payload-version-advert"><code class="inline">dsp-payload-versions</code> extension</a>
+      on <code class="inline">CapabilityStatement.rest</code>. Servers <strong>SHALL NOT</strong>
+      auto-upgrade a payload's version on read; clients ask for a specific version or accept
+      the server default. On write, servers <strong>SHALL</strong> reject with
+      <code class="inline">422</code> if the declared <code class="inline">payload-version</code>
+      isn't in the accepted set.
+    </p>
+    <p>
+      <strong>Why:</strong> DSP will evolve. Silent version coercion is the fastest way to
+      break partners in production.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>R4 · Provenance per ingest</h3>
+    <p>
+      Every <code class="inline">$dsp-ingest</code> (or equivalent transaction)
+      <strong>SHALL</strong> produce at least one <code class="inline">Provenance</code> resource
+      whose <code class="inline">target</code> lists every clinical resource created or updated,
+      and whose <code class="inline">entity</code> references the source transcript
+      <code class="inline">DocumentReference</code> (and recording, if present). This is the
+      traceability substrate DSP already assumes.
+    </p>
+  </div>
+
+  <h2>Conformance levels</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th scope="col">Level</th><th scope="col">Requires</th><th scope="col">Use case</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge">DSP-Core</span></td><td>Profiles + extensions + R1–R4; Read: <code class="inline">$graphql</code> canonical query <em>or</em> <code class="inline">Encounter/$everything</code>; Write: transaction Bundle + <code class="inline">$validate</code>; Terminology: <code class="inline">$lookup</code> + <code class="inline">$expand</code></td><td>Full DSP read+write partners.</td></tr>
+        <tr><td><span class="badge">DSP-Read</span></td><td>Profiles + extensions + R1–R3; Read: <code class="inline">$graphql</code> or <code class="inline">$everything</code></td><td>Analytics / downstream consumers.</td></tr>
+        <tr><td><span class="badge">DSP-Push</span></td><td>DSP-Core + <code class="inline">SubscriptionTopic</code> + Subscription Backport <code class="inline">$events</code>/<code class="inline">$status</code></td><td>Real-time partners.</td></tr>
+        <tr><td><span class="badge">DSP-Bulk</span></td><td>DSP-Read + Bulk Data <code class="inline">$export?_since=</code> on the patient compartment</td><td>Cross-encounter analytics, CDC re-sync.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</Layout>

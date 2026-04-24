@@ -1,0 +1,80 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MapHeader from '../../components/MapHeader.astro';
+---
+<Layout title="Mapping — Follow-up order" active="mapping">
+  <MapHeader
+    title="Follow-up order"
+    dspType="order.follow_up"
+    fhirResource="ServiceRequest (category=follow-up) and optionally Appointment"
+    summary="DSP follow-up orders are a provider-intent artifact (“see me in 2 weeks”) rather than a booked appointment. Model as a ServiceRequest with an occurrence timing; a later Appointment realizes it if scheduled."
+  />
+
+  <h2>Field-by-field</h2>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code class="inline">type: FOLLOW_UP_ORDER</code></td><td><code class="inline">ServiceRequest.category = follow-up</code></td><td>Suggest a DSP-FHIR code <code class="inline">follow-up</code> bound to an IG CodeSystem, or SNOMED <code class="inline">390906007</code>.</td></tr>
+        <tr><td><code class="inline">order_data.return_in_value</code> + <code class="inline">return_in_unit</code></td><td><code class="inline">ServiceRequest.occurrenceTiming.repeat.boundsDuration</code> <em>or</em> extension <code class="inline">return-in</code></td><td>An explicit <code class="inline">Duration</code> (e.g. value=2, unit=wk, UCUM).</td></tr>
+        <tr><td><code class="inline">order_data.approximation</code></td><td>Extension <code class="inline">approximation</code> on the Duration</td><td>boolean.</td></tr>
+        <tr><td><code class="inline">order_data.prn</code></td><td><code class="inline">asNeeded[x]</code> on Dosage isn't applicable here; use extension or <code class="inline">ServiceRequest.asNeededBoolean</code> pattern via profile</td><td>Or carry as <code class="inline">patientInstruction</code>.</td></tr>
+        <tr><td><code class="inline">reason</code></td><td><code class="inline">reasonCode</code> / <code class="inline">reasonReference</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Side-by-side example</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>DSP</h3>
+<pre><code>{`{
+  "id": "followup-001",
+  "type": "FOLLOW_UP_ORDER",
+  "context": { "content_type": "order.follow_up" },
+  "description": "Follow up in approximately 2 weeks or as needed",
+  "intent": "order",
+  "reason": "Routine follow-up visit",
+  "reason_references": ["cond-001"],
+  "order_data": {
+    "return_in_value": "2",
+    "return_in_unit": "week",
+    "approximation": true,
+    "prn": true
+  }
+}`}</code></pre>
+    </div>
+    <div>
+      <h3>FHIR R4 (DSP-FHIR profile)</h3>
+<pre><code>{`{
+  "resourceType":"ServiceRequest",
+  "status":"active","intent":"order",
+  "category":[{"coding":[{"system":"https://dsp-fhir.org/CodeSystem/order-category","code":"follow-up"}]}],
+  "code":{"text":"Follow up in approximately 2 weeks or as needed"},
+  "reasonCode":[{"text":"Routine follow-up visit"}],
+  "reasonReference":[{"reference":"Condition/cond-001"}],
+  "occurrenceTiming":{
+    "repeat":{
+      "boundsDuration":{
+        "value":2,"unit":"wk","system":"http://unitsofmeasure.org","code":"wk",
+        "extension":[{"url":"https://dsp-fhir.org/StructureDefinition/approximation","valueBoolean":true}]
+      }
+    }
+  },
+  "subject":{"reference":"Patient/pat-67890"},
+  "encounter":{"reference":"Encounter/enc-12345"},
+  "extension":[
+    {"url":"https://dsp-fhir.org/StructureDefinition/prn","valueBoolean":true}
+  ]
+}`}</code></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    Follow-up is the weakest-fit DSP order type in R4. FHIR has no "return visit request" primitive;
+    profiling <code class="inline">ServiceRequest</code> with a DSP-FHIR category and a couple of
+    extensions is the cleanest option. If the follow-up is actually booked, emit an
+    <code class="inline">Appointment</code> that references this <code class="inline">ServiceRequest</code>
+    via <code class="inline">basedOn</code>.
+  </div>
+</Layout>

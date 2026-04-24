@@ -1,0 +1,494 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Operations — DSP-FHIR IG" active="operations">
+  <section class="hero">
+    <h1>Operations</h1>
+    <p class="sub">
+      How the IG closes each DSP gap — preferring standard FHIR operations, falling
+      back to custom ones only when no standard op fits. Most "gap smoothers" turn out
+      to be existing FHIR or IG operations we just need to profile and cite.
+    </p>
+  </section>
+
+  <div class="callout">
+    <strong>Principle of least novelty.</strong> If a gap can be closed with a
+    <code class="inline">SearchParameter</code>, a profile invariant, a reused core
+    extension, or a standard operation from the base spec / a published IG — it is.
+    Custom operations are a last resort, reserved for cases where no existing
+    mechanism fits the semantics at all.
+  </div>
+
+  <div class="callout warn">
+    <strong>None of these are load-bearing.</strong> The rules that actually bind DSP
+    semantics live in <a href="/dsp-fhir/ig#normative-rules">the IG's normative rules</a> (turn-index
+    stability, recording binding, version negotiation, provenance). Everything on this
+    page is optional server convenience. Adopt each on its merits.
+  </div>
+
+  <h2>Audit results — 7 of 9 drafts resolved to standard ops</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th scope="col">Gap</th><th scope="col">Draft custom op</th><th scope="col">Verdict</th><th scope="col">Standard replacement</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Grounding turn-join</td><td><code class="inline">$ground</code></td><td><span class="badge">Custom</span></td><td>None — genuinely novel</td></tr>
+        <tr><td>2 · Low-confidence review</td><td><code class="inline">$low-confidence</code></td><td><span class="badge ok">Drop op</span></td><td><code class="inline">SearchParameter</code> + cross-type <code class="inline">_type=</code></td></tr>
+        <tr><td>3 · Payload-version negotiation</td><td><code class="inline">$version-capabilities</code></td><td><span class="badge ok">Drop op</span></td><td><code class="inline">CapabilityStatement</code> extension</td></tr>
+        <tr><td>4 · Spoken-form lookup</td><td><code class="inline">$lookup-spoken-form</code></td><td><span class="badge ok">Reuse</span></td><td><code class="inline">CodeSystem/$lookup</code> + <code class="inline">ValueSet/$expand?filter=</code></td></tr>
+        <tr><td>5 · Change tracking</td><td><code class="inline">$changes-since</code></td><td><span class="badge ok">Reuse</span></td><td><code class="inline">Encounter/$everything?_since=</code> + Bulk <code class="inline">$export?_since=</code></td></tr>
+        <tr><td>7 · Materialize follow-up</td><td><code class="inline">$materialize-appointment</code></td><td><span class="badge ok">Reuse</span></td><td><code class="inline">PlanDefinition/$apply</code> / <code class="inline">ActivityDefinition/$apply</code></td></tr>
+        <tr><td>9 · Recording content</td><td><code class="inline">$recording-content</code></td><td><span class="badge ok">Already covered</span></td><td>IG rule <a href="/dsp-fhir/ig#normative-rules">R2</a> (SMART-scoped <code class="inline">Binary</code>)</td></tr>
+        <tr><td>10 · Accompanying party</td><td><code class="inline">$resolve-accompanying-party</code></td><td><span class="badge ok">Profile-of</span></td><td><code class="inline">RelatedPerson/$match</code> (mirrors <code class="inline">Patient/$match</code>; HRex <code class="inline">$member-match</code> as prior art)</td></tr>
+        <tr><td>Open Q · Turn-ref integrity</td><td><code class="inline">$verify-turn-refs</code></td><td><span class="badge ok">Reuse</span></td><td><code class="inline">$validate</code> + profile invariant <code class="inline">turn-refs-resolve</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="soft" />
+
+  <h2 id="reused">A. Reuse standard operations</h2>
+  <p class="lead">
+    Each of these DSP gaps closes cleanly with an operation that already exists — in
+    the FHIR base spec, in IPS, US Core, Bulk Data, or as a well-known pattern (e.g.
+    the <code class="inline">$match</code> family). The IG's job is to publish the
+    input/output bindings and cite the source, not invent a new op.
+  </p>
+
+  <h3 id="spoken-form">Spoken-form lookup — <code class="inline">CodeSystem/$lookup</code> + <code class="inline">ValueSet/$expand</code></h3>
+  <p>
+    <strong>Gap:</strong> voice commands ("go to HPI", "open subjective") need to resolve
+    to a canonical code (LOINC section). <strong>Insight:</strong> "spoken form" is a
+    <em>designation</em> — exactly what <code class="inline">CodeSystem.concept.designation</code>
+    was designed for. Publish a DSP spoken-form <code class="inline">CodeSystem</code>
+    whose concepts each carry designations for recognized voice aliases; then the two
+    standard terminology ops cover both directions.
+  </p>
+  <p><strong>Forward (code → spoken forms)</strong> with <code class="inline">CodeSystem/$lookup</code>:</p>
+<pre><code>{`GET [base]/CodeSystem/$lookup?system=http://loinc.org&code=10164-2&property=designation
+
+=> 200 OK
+{
+  "resourceType":"Parameters",
+  "parameter":[
+    { "name":"name","valueString":"LOINC" },
+    { "name":"display","valueString":"History of present illness Narrative" },
+    { "name":"designation","part":[
+      { "name":"language","valueCode":"en" },
+      { "name":"use","valueCoding":{"system":"https://dsp-fhir.org/CodeSystem/spoken-form-use","code":"voice-alias"}},
+      { "name":"value","valueString":"HPI" }
+    ]},
+    { "name":"designation","part":[
+      { "name":"use","valueCoding":{"system":"https://dsp-fhir.org/CodeSystem/spoken-form-use","code":"voice-alias"}},
+      { "name":"value","valueString":"history of present illness" }
+    ]}
+  ]
+}`}</code></pre>
+  <p><strong>Reverse (spoken form → code)</strong> with <code class="inline">ValueSet/$expand?filter=</code>:</p>
+<pre><code>{`GET [base]/ValueSet/dsp-section-spoken-forms/$expand?filter=HPI&includeDesignations=true
+
+=> 200 OK
+{
+  "resourceType":"ValueSet",
+  "expansion":{
+    "contains":[
+      { "system":"http://loinc.org","code":"10164-2","display":"History of present illness",
+        "designation":[
+          { "use":{"system":"https://dsp-fhir.org/CodeSystem/spoken-form-use","code":"voice-alias"},
+            "value":"HPI" }
+        ]
+      }
+    ]
+  }
+}`}</code></pre>
+  <p>
+    <strong>Why this is better than a custom op:</strong> any FHIR terminology server
+    already implements <code class="inline">$lookup</code> and <code class="inline">$expand</code>.
+    The IG's contribution is publishing the spoken-form <code class="inline">CodeSystem</code>
+    and the <code class="inline">spoken-form-use</code> designation-use code — not new
+    wire protocol.
+  </p>
+
+  <h3 id="changes-since">Change tracking — <code class="inline">Encounter/$everything?_since=</code></h3>
+  <p>
+    <strong>Gap:</strong> DSP ships NEW / UPDATED / DELETED flags on every item.
+    <strong>Insight:</strong> FHIR already has three layered mechanisms for the same
+    question, at three granularities:
+  </p>
+  <ul class="clean">
+    <li><strong>Per-encounter delta:</strong> <code class="inline">Encounter/$everything?_since=&#123;instant&#125;</code> — Bundle of everything touched since that instant, scoped to one encounter.</li>
+    <li><strong>Cross-encounter batch:</strong> Bulk Data <code class="inline">$export?_since=</code> on the patient compartment.</li>
+    <li><strong>Resource-level audit:</strong> <code class="inline">_history</code> for any single resource.</li>
+  </ul>
+  <p>The IG adds a derivation convention — no new op:</p>
+<pre><code>{`GET [base]/Encounter/enc-12345/$everything?_since=2026-04-23T14:00:00Z
+
+=> 200 OK (Bundle, type=searchset)
+// For each entry, the consumer derives DSP status from Provenance:
+//   - NEW      : entry.resource.meta.versionId == "1" AND meta.lastUpdated > _since
+//   - UPDATED  : entry.resource.meta.versionId  > "1" AND meta.lastUpdated > _since
+//   - DELETED  : entry is an OperationOutcome / tombstone, OR matching
+//                Provenance.activity = { system: http://terminology.hl7.org/CodeSystem/v3-DataOperation, code: DELETE }
+// Servers SHOULD emit a Provenance per mutation so the DELETE case is explicit.`}</code></pre>
+  <p>
+    <strong>Why this is better than a custom op:</strong> any FHIR server that supports
+    <code class="inline">$everything</code> (widely implemented) delivers this out of
+    the box; the IG only pins the <code class="inline">Provenance.activity</code>
+    vocabulary so DELETE is unambiguous.
+  </p>
+
+  <h3 id="materialize-appointment">Materialize follow-up — <code class="inline">PlanDefinition/$apply</code></h3>
+  <p>
+    <strong>Gap:</strong> follow-up arrives as a <code class="inline">ServiceRequest</code>
+    with <code class="inline">occurrenceTiming.repeat.boundsDuration</code>; downstream
+    wants an <code class="inline">Appointment</code>. <strong>Insight:</strong> FHIR has
+    a purpose-built op for "turn a clinical intent into proposed action resources" —
+    <code class="inline">$apply</code>. An <code class="inline">ActivityDefinition</code>
+    with <code class="inline">kind=Appointment</code> is exactly the template shape.
+  </p>
+  <p><strong>1. Publish an ActivityDefinition (once, as an IG artifact):</strong></p>
+<pre><code>{`{
+  "resourceType":"ActivityDefinition",
+  "id":"dsp-follow-up-appointment",
+  "url":"https://dsp-fhir.org/ActivityDefinition/dsp-follow-up-appointment",
+  "status":"active",
+  "kind":"Appointment",
+  "intent":"proposal",
+  "timingDuration":{"value":30,"unit":"min","system":"http://unitsofmeasure.org","code":"min"},
+  "participant":[
+    { "type":"patient" },
+    { "type":"practitioner" }
+  ]
+}`}</code></pre>
+  <p><strong>2. Invoke <code class="inline">$apply</code> with the source ServiceRequest:</strong></p>
+<pre><code>{`POST [base]/ActivityDefinition/dsp-follow-up-appointment/$apply
+
+{
+  "resourceType":"Parameters",
+  "parameter":[
+    { "name":"subject","valueReference":{"reference":"Patient/pat-67890"}},
+    { "name":"encounter","valueReference":{"reference":"Encounter/enc-12345"}},
+    { "name":"basedOn","valueReference":{"reference":"ServiceRequest/fu-001"}},
+    { "name":"practitioner","valueReference":{"reference":"Practitioner/pract-001"}}
+  ]
+}
+
+=> 200 OK
+
+{
+  "resourceType":"Appointment","id":"appt-0042","status":"proposed",
+  "basedOn":[{"reference":"ServiceRequest/fu-001"}],
+  "participant":[
+    { "actor":{"reference":"Patient/pat-67890"},"status":"needs-action" },
+    { "actor":{"reference":"Practitioner/pract-001"},"status":"tentative" }
+  ],
+  "extension":[
+    { "url":"https://dsp-fhir.org/StructureDefinition/approximate-match","valueBoolean":true }
+  ]
+}`}</code></pre>
+  <div class="callout warn">
+    <strong>Honest limitation.</strong> <code class="inline">$apply</code> produces a
+    proposed <code class="inline">Appointment</code> — it does <em>not</em> find an open
+    slot on a specific practitioner's calendar. Slot-finding is a scheduling-service
+    concern that lives outside the IG's scope. Clients either (a) pass
+    <code class="inline">Appointment.start</code> in as a hint, (b) run
+    <code class="inline">Appointment.$find</code> / an ORM-native slot search after
+    <code class="inline">$apply</code>, or (c) leave it to a human.
+  </div>
+
+  <h3 id="related-person-match">Accompanying party — <code class="inline">RelatedPerson/$match</code></h3>
+  <p>
+    <strong>Gap:</strong> DSP's <code class="inline">accompanied_by</code> is a free
+    string ("Jane Doe, spouse"); the IG needs a real
+    <code class="inline">RelatedPerson</code>. <strong>Insight:</strong> FHIR's
+    <code class="inline">Patient/$match</code> (base spec) is the canonical pattern for
+    "resolve a weakly-identified human to a real resource". Mirror its signature on
+    <code class="inline">RelatedPerson</code>. Da Vinci HRex's
+    <code class="inline">$member-match</code> is the closest prior art for an op in this
+    shape.
+  </p>
+<pre><code>{`POST [base]/RelatedPerson/$match
+
+{
+  "resourceType":"Parameters",
+  "parameter":[
+    { "name":"resource","resource":{
+        "resourceType":"RelatedPerson",
+        "patient":{"reference":"Patient/pat-67890"},
+        "relationship":[{
+          "coding":[{
+            "system":"http://terminology.hl7.org/CodeSystem/v3-RoleCode",
+            "code":"SPS","display":"spouse"
+          }]
+        }],
+        "name":[{"text":"Jane Doe"}]
+    }},
+    { "name":"onlyCertainMatches","valueBoolean":false },
+    { "name":"count","valueInteger":3 }
+  ]
+}
+
+=> 200 OK
+
+{
+  "resourceType":"Bundle","type":"searchset",
+  "entry":[
+    { "fullUrl":"https://example.org/RelatedPerson/rp-5512",
+      "resource":{ "resourceType":"RelatedPerson","id":"rp-5512", "...":"..." },
+      "search":{
+        "mode":"match",
+        "score":0.88,
+        "extension":[
+          { "url":"http://hl7.org/fhir/StructureDefinition/match-grade",
+            "valueCode":"probable" }
+        ]
+      }
+    }
+  ]
+}`}</code></pre>
+  <p>
+    <strong>Status honesty:</strong> <code class="inline">RelatedPerson/$match</code> is
+    not in the FHIR base spec — the base only defines
+    <code class="inline">Patient/$match</code>. This IG profiles a parallel op with the
+    same input/output shape, which is preferable to inventing
+    <code class="inline">$resolve-accompanying-party</code> because the signature is
+    immediately familiar to every FHIR implementer.
+  </p>
+
+  <h3 id="verify-turn-refs">Turn-ref integrity — <code class="inline">$validate</code> + profile invariant</h3>
+  <p>
+    <strong>Gap:</strong> integer turn-refs drift when transcripts are revised.
+    <strong>Insight:</strong> "is this resource well-formed against a profile" is what
+    <code class="inline">$validate</code> does; the turn-ref rule is a
+    <em>profile invariant</em>, not a new operation.
+  </p>
+  <p><strong>Invariant on the <code class="inline">transcript-turn-refs</code> extension:</strong></p>
+<pre><code>{`{
+  "resourceType":"StructureDefinition",
+  "url":"https://dsp-fhir.org/StructureDefinition/transcript-turn-refs",
+  "derivation":"constraint",
+  "differential":{
+    "element":[{
+      "id":"Extension",
+      "constraint":[{
+        "key":"turn-refs-resolve",
+        "severity":"error",
+        "human":"Every turn index MUST resolve in the referenced DocumentReference version.",
+        "expression":"extension('turn').extension('index').valueInteger.all(
+          %resource.extension('transcript').valueReference.resolve().ofType(DocumentReference)
+            .content.attachment.data.decode('base64').parse('application/json')
+            .transcript.turns.count() > $this
+        )"
+      }]
+    }]
+  }
+}`}</code></pre>
+  <p><strong>Invocation:</strong></p>
+<pre><code>{`POST [base]/MedicationRequest/med-001/$validate
+
+=> 200 OK
+{
+  "resourceType":"OperationOutcome",
+  "issue":[
+    { "severity":"error","code":"invariant",
+      "diagnostics":"turn-refs-resolve: MedicationRequest/med-001 references turn 11; transcript revision 3 has only 9 turns.",
+      "location":["MedicationRequest.extension('transcript-turn-refs').extension('turn')[0]"] }
+  ]
+}`}</code></pre>
+  <p>
+    <strong>Why this is better:</strong> <code class="inline">$validate</code> is on
+    every FHIR server; the rule is discoverable via the profile; clients can run it
+    defensively without learning a custom op. The FHIRPath invariant is approximate
+    (the base64/parse step is pseudo-code for illustration) — real implementations may
+    push the check into a server-side validator. Normative rule
+    <a href="/dsp-fhir/ig#normative-rules">R1</a> does the heavy lifting; this op just surfaces
+    violations when they occur.
+  </p>
+
+  <h3 id="graphql-read">Canonical read — <code class="inline">$graphql</code>, with ancestors</h3>
+  <p>
+    The IG's <a href="/dsp-fhir/graphql">canonical DSP read</a> is a published
+    <code class="inline">$graphql</code> query. When <code class="inline">$graphql</code>
+    isn't available, these standard ops are the documented fallbacks — <em>none are
+    DSP-specific</em>:
+  </p>
+  <ul class="clean">
+    <li><code class="inline">Encounter/$everything</code> — one-call encounter bundle (widely implemented).</li>
+    <li><code class="inline">Patient/$summary</code> (<a href="https://hl7.org/fhir/uv/ips/">IPS</a>) — the blueprint for a canonical, profile-driven projection. DSP's canonical query is morally an IPS-style projection scoped to an encounter.</li>
+    <li><code class="inline">Composition/$document</code> — materialize a section-centric bundle, natural fit for DSP's document-section resources.</li>
+    <li>US Core <code class="inline">$docref</code> — surfaces transcript <code class="inline">DocumentReference</code> resources by patient.</li>
+  </ul>
+
+  <hr class="soft" />
+
+  <h2 id="custom">B. Genuinely custom — one op</h2>
+  <p class="lead">
+    Exactly one proposed op survived the audit as genuinely novel: the transcript
+    turn-join. No existing FHIR or IG op addresses the shape "given a resource with
+    integer turn-refs, return the referenced transcript turns with surrounding
+    context".
+  </p>
+
+  <h3 id="ground"><code class="inline">$ground</code> — turn-join with context window</h3>
+  <p>
+    <strong>What hurts:</strong> the IG models grounding as a
+    <code class="inline">transcript-turn-refs</code> extension of integer indices. A
+    consumer asking "why does this MedicationRequest exist?" must fetch the transcript
+    <code class="inline">DocumentReference</code>, parse the vendor JSON, and hand-join
+    integers to turns. No standard op does this join.
+  </p>
+<pre><code>{`GET [base]/MedicationRequest/med-001/$ground?include-content=true&context-window=1
+
+=> 200 OK
+
+{
+  "resourceType":"Parameters",
+  "parameter":[
+    { "name":"transcript","valueReference":{"reference":"DocumentReference/dr-transcript-001/_history/3"}},
+    { "name":"turn","part":[
+      { "name":"index","valueInteger":10 },
+      { "name":"speaker","valueCode":"provider" },
+      { "name":"start-time","valueString":"00:01:40.1" },
+      { "name":"end-time","valueString":"00:01:42.7" },
+      { "name":"content","valueString":"So for the bronchitis..." },
+      { "name":"role","valueCode":"context" }
+    ]},
+    { "name":"turn","part":[
+      { "name":"index","valueInteger":11 },
+      { "name":"speaker","valueCode":"provider" },
+      { "name":"content","valueString":"Let's start azithromycin 250 daily for five days." },
+      { "name":"role","valueCode":"grounding" }
+    ]}
+  ]
+}`}</code></pre>
+  <p>
+    <strong>Why it earns its keep:</strong> the join is awkward for every consumer,
+    trivial for the server that wrote the transcript.
+    <code class="inline">context-window</code> is the bonus — clients can't easily
+    compute "turn ±N" without the vendor format. The returned transcript reference
+    pins <code class="inline">_history/3</code> so normative rule
+    <a href="/dsp-fhir/ig#normative-rules">R1</a> holds end-to-end.
+  </p>
+  <p>
+    <strong>Why not reuse <code class="inline">Provenance</code> or <code class="inline">$everything</code>?</strong>
+    <code class="inline">Provenance</code> records the linkage but doesn't dereference
+    the integer indices into turn content. <code class="inline">$everything</code> hands
+    back the whole transcript; the consumer still does the join. Neither is equivalent.
+  </p>
+
+  <hr class="soft" />
+
+  <h2 id="search-params">C. SearchParameters &amp; CapabilityStatement</h2>
+  <p class="lead">
+    Three gaps close with indexing + capability advertisement, not operations. These
+    are the least-novel remedies — pure FHIR conformance artifacts.
+  </p>
+
+  <h3 id="confidence-search">Low-confidence — <code class="inline">SearchParameter</code> only</h3>
+  <p>
+    Index the <code class="inline">confidence-score</code> extension and use FHIR's
+    cross-type search (<code class="inline">_type=</code>) to build a review queue. No
+    op required.
+  </p>
+<pre><code>{`{
+  "resourceType":"SearchParameter",
+  "url":"https://dsp-fhir.org/SearchParameter/dsp-confidence",
+  "name":"confidence",
+  "base":["MedicationRequest","ServiceRequest","Condition","Observation"],
+  "code":"confidence",
+  "type":"number",
+  "expression":"extension('https://dsp-fhir.org/StructureDefinition/confidence-score').valueDecimal"
+}
+
+// Cross-type review queue — one call, multiple resource types:
+GET [base]/?_type=MedicationRequest,ServiceRequest,Condition,Observation
+          &encounter=Encounter/enc-12345
+          &confidence=lt0.8
+          &_sort=confidence`}</code></pre>
+
+  <h3 id="payload-version-advert">Payload-version negotiation — <code class="inline">CapabilityStatement</code> extension</h3>
+  <p>
+    No custom op — use the standard
+    <code class="inline">CapabilityStatement.rest.resource.extension</code> slot to
+    advertise accepted and emitted DSP payload versions. Clients read
+    <code class="inline">CapabilityStatement</code> already.
+  </p>
+<pre><code>{`{
+  "resourceType":"CapabilityStatement",
+  "rest":[{
+    "mode":"server",
+    "extension":[
+      { "url":"https://dsp-fhir.org/StructureDefinition/dsp-payload-versions",
+        "extension":[
+          { "url":"accepts","valueCode":"1.0.0" },
+          { "url":"emits",  "valueCode":"1.0.0" },
+          { "url":"emits",  "valueCode":"0.9.3" },
+          { "url":"default-emit","valueCode":"1.0.0" }
+        ]
+      }
+    ]
+  }]
+}`}</code></pre>
+  <p>
+    And the accompanying SearchParameter (server denormalizes payload-version to
+    <code class="inline">meta.tag</code> so baseline FHIR search works):
+  </p>
+<pre><code>{`GET [base]/Encounter?_tag=https://dsp-fhir.org/CodeSystem/payload-version|1.0.0`}</code></pre>
+  <p>
+    Normative rule <a href="/dsp-fhir/ig#normative-rules">R3</a> bites here: servers MUST
+    advertise, MUST NOT auto-upgrade on read, and MUST reject unknown versions on
+    write with <code class="inline">422</code>.
+  </p>
+
+  <h3 id="search-terms">Search terms — <code class="inline">SearchParameter</code> only</h3>
+  <p>
+    Gap 8 (synonyms / search terms) is pure indexing. Ships as
+    <code class="inline">dsp-search-term</code> (type <code class="inline">string</code>)
+    over the <code class="inline">search-terms</code> extension. No op.
+  </p>
+
+  <hr class="soft" />
+
+  <h2>Capability advertisement</h2>
+  <p>
+    A conformant DSP-FHIR server advertises the standard ops it relies on (so clients
+    can feature-detect) and its SearchParameters. The only custom op is
+    <code class="inline">$ground</code>.
+  </p>
+<pre><code>{`{
+  "resourceType":"CapabilityStatement",
+  "rest":[{
+    "mode":"server",
+    "operation":[
+      // Standard FHIR base-spec operations the IG relies on:
+      { "name":"validate",       "definition":"http://hl7.org/fhir/OperationDefinition/Resource-validate" },
+      { "name":"everything",     "definition":"http://hl7.org/fhir/OperationDefinition/Encounter-everything" },
+      { "name":"graphql",        "definition":"http://hl7.org/fhir/OperationDefinition/Resource-graphql" },
+      { "name":"lookup",         "definition":"http://hl7.org/fhir/OperationDefinition/CodeSystem-lookup" },
+      { "name":"expand",         "definition":"http://hl7.org/fhir/OperationDefinition/ValueSet-expand" },
+      { "name":"apply",          "definition":"http://hl7.org/fhir/OperationDefinition/ActivityDefinition-apply" },
+      { "name":"match",          "definition":"http://hl7.org/fhir/OperationDefinition/Patient-match" },
+      { "name":"document",       "definition":"http://hl7.org/fhir/OperationDefinition/Composition-document" },
+
+      // IG-profiled operation (same signature as Patient-match):
+      { "name":"match",          "definition":"https://dsp-fhir.org/OperationDefinition/RelatedPerson-match" },
+
+      // Genuinely custom:
+      { "name":"ground",         "definition":"https://dsp-fhir.org/OperationDefinition/ground" }
+    ],
+    "searchParam":[
+      { "name":"confidence",      "definition":"https://dsp-fhir.org/SearchParameter/dsp-confidence",      "type":"number" },
+      { "name":"payload-version", "definition":"https://dsp-fhir.org/SearchParameter/dsp-payload-version", "type":"token"  },
+      { "name":"search-term",     "definition":"https://dsp-fhir.org/SearchParameter/dsp-search-term",    "type":"string" }
+    ]
+  }]
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>Bottom line.</strong> An audit against the base spec + IPS, US Core, Bulk
+    Data, HRex, and Subscription Backport resolved 7 of 9 draft custom ops into
+    standard operations the IG only needs to cite. One genuinely custom op
+    (<code class="inline">$ground</code>) remains. The required semantics live in
+    <a href="/dsp-fhir/ig#normative-rules">normative rules R1–R4</a>; everything on this page is
+    optional convenience.
+  </div>
+</Layout>
