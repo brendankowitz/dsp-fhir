@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Activity order" active="mapping">
@@ -118,6 +119,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for <code class="inline">DspActivityOrder → CarePlan.activity[]</code>. Per-activity confidence isn't expressible on <code class="inline">activity.detail</code>; callers needing it should emit standalone <code class="inline">ServiceRequest</code>s and link via <code class="inline">activity.reference</code> (see callout below).</p>
 <pre><code>{FML.activity}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="activity" />
   </Fragment>
   </Tabs>
 

@@ -1403,6 +1403,15 @@ w('input/pagecontent/changelog.md', `# Changelog
 - Worked example Bundle + illustrative DSP condition input.
 `);
 
+// ---------- SQL-on-FHIR v2 ViewDefinitions ----------
+// Shared authoring lives in src/data/viewDefinitions.mjs so the site and the
+// IG zip stay in lockstep.
+const { ALL_VIEW_DEFINITIONS } = await import('../src/data/viewDefinitions.mjs');
+for (const vd of ALL_VIEW_DEFINITIONS) {
+  j(`input/resources/viewdefinition/${vd.name}.json`, vd);
+}
+console.log(`  + ${ALL_VIEW_DEFINITIONS.length} ViewDefinitions`);
+
 // ---------- zip it ----------
 mkdirSync(dirname(OUT_ZIP), { recursive: true });
 if (existsSync(OUT_ZIP)) rmSync(OUT_ZIP);

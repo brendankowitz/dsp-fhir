@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Tabs from '../components/Tabs.astro';
+import SqlOnFhirViews from '../components/SqlOnFhirViews.astro';
 ---
 <Layout title="Resource mapping catalog" active="mapping">
   <h1>DSP ↔ FHIR resource mapping</h1>
@@ -104,6 +105,9 @@ group Envelope(source src : DspPayload, target bnd : Bundle) {
   };
 }`}</code></pre>
     </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="envelope" />
+  </Fragment>
   </Tabs>
 
   <h2>Encounter block</h2>
@@ -275,6 +279,9 @@ group PatientBlock(source src : DspPatient, target pat : Patient) {
   };
 }`}</code></pre>
     </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="encounter-block" />
+  </Fragment>
   </Tabs>
 
   <h2>Recordings, sessions, transcript</h2>
@@ -416,6 +423,9 @@ group Transcript(source t : DspTranscript, target dr : DocumentReference) {
   };
 }`}</code></pre>
     </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="transcript" />
+  </Fragment>
   </Tabs>
 
   <h2>Document</h2>
@@ -516,6 +526,9 @@ group SectionToFhirSection(source ds : DspSection, target sec : Composition.Sect
   };
 }`}</code></pre>
     </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="document" />
+  </Fragment>
   </Tabs>
 
   <h2>Resources (clinical types)</h2>

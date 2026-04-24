@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Therapy order" active="mapping">
@@ -89,6 +90,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for <code class="inline">DspTherapyOrder → ServiceRequest(category=therapy)</code>. Orthogonal <code class="inline">Goal</code> resources are produced by a sibling map.</p>
 <pre><code>{FML.therapy}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="therapy" />
   </Fragment>
   </Tabs>
 

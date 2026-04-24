@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Condition" active="mapping">
@@ -100,6 +101,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Executable FHIR Mapping Language skeleton for <code class="inline">DspCondition → Condition</code>. The full map ships in the <a href="/dsp-fhir/ig">downloadable IG package</a> and can be executed via <code class="inline">StructureMap/$transform</code> on a capable FHIR server.</p>
 <pre><code>{FML.condition}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="condition" />
   </Fragment>
   </Tabs>
 </Layout>

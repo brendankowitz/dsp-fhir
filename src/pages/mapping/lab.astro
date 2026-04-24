@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Laboratory order" active="mapping">
@@ -97,6 +98,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for <code class="inline">DspLabOrder → ServiceRequest(category=laboratory)</code>. The companion <code class="inline">Specimen</code> is created by a sibling group not shown here.</p>
 <pre><code>{FML.lab}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="lab" />
   </Fragment>
   </Tabs>
 </Layout>

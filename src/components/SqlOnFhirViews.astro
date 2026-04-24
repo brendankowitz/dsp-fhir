@@ -1,0 +1,32 @@
+---
+import { VIEW_DEFINITIONS } from '../data/viewDefinitions.mjs';
+
+interface Props {
+  slug: string;
+  intro?: string;
+}
+const { slug, intro } = Astro.props as Props;
+const views = VIEW_DEFINITIONS[slug] ?? [];
+---
+{views.length === 0 ? (
+  <p class="muted">No SQL-on-FHIR ViewDefinition defined for this page.</p>
+) : (
+  <>
+    <p>
+      {intro ??
+        `SQL-on-FHIR v2 ViewDefinition${views.length > 1 ? 's' : ''} that flatten${views.length > 1 ? '' : 's'} every field above — including DSP extensions — into a tabular projection. Runnable as-is on any spec-conformant engine (Pathling, sof-exec, Aidbox SQL-on-FHIR, Databricks).`
+      }
+      {' '}See the <a href="https://build.fhir.org/ig/FHIR/sql-on-fhir-v2/" target="_blank" rel="noopener">SQL-on-FHIR v2 spec</a>. These ViewDefinitions also ship as JSON in the <a href="/dsp-fhir/dsp-fhir-ig.zip">IG zip</a>.
+    </p>
+    {views.map((vd) => (
+      <div class="sof-view">
+        <h3>
+          <code class="inline">{vd.name}</code>
+          <span class="muted"> — {vd.title ?? vd.resource}</span>
+        </h3>
+        {vd.description && <p class="muted" style="margin:4px 0 8px">{vd.description}</p>}
+<pre><code>{JSON.stringify(vd, null, 2)}</code></pre>
+      </div>
+    ))}
+  </>
+)}

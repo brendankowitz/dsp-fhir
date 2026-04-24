@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Follow-up order" active="mapping">
@@ -81,6 +82,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for <code class="inline">DspFollowUpOrder → ServiceRequest(category=follow-up)</code> with the <code class="inline">return-in</code> <code class="inline">Duration</code> + approximation-flag pattern.</p>
 <pre><code>{FML['follow-up']}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="follow-up" />
   </Fragment>
   </Tabs>
 

@@ -1,12 +1,13 @@
 ---
 interface Props {
-  labels?: { summary?: string; example?: string; fml?: string };
+  labels?: { summary?: string; example?: string; fml?: string; sqlOnFhir?: string };
 }
 const { labels = {} } = Astro.props as Props;
 const L = {
   summary: labels.summary ?? 'Summary',
   example: labels.example ?? 'Example',
   fml: labels.fml ?? 'FML mapping',
+  sqlOnFhir: labels.sqlOnFhir ?? 'SQL-on-FHIR',
 };
 ---
 <div class="tabs" data-dsp-tabs>
@@ -14,10 +15,12 @@ const L = {
     <button type="button" class="tab-btn active" data-tab="summary" role="tab" aria-selected="true">{L.summary}</button>
     <button type="button" class="tab-btn" data-tab="example" role="tab" aria-selected="false">{L.example}</button>
     <button type="button" class="tab-btn" data-tab="fml" role="tab" aria-selected="false">{L.fml}</button>
+    <button type="button" class="tab-btn" data-tab="sqlOnFhir" role="tab" aria-selected="false">{L.sqlOnFhir}</button>
   </div>
   <div class="tab-panel active" data-panel="summary" role="tabpanel"><slot name="summary" /></div>
   <div class="tab-panel" data-panel="example" role="tabpanel"><slot name="example" /></div>
   <div class="tab-panel" data-panel="fml" role="tabpanel"><slot name="fml" /></div>
+  <div class="tab-panel" data-panel="sqlOnFhir" role="tabpanel"><slot name="sqlOnFhir" /></div>
 </div>
 
 <script is:inline>

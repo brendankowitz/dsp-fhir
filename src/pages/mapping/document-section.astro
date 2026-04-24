@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Document section" active="mapping">
@@ -96,6 +97,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for a single <code class="inline">DspDocumentSection → Composition.section</code>. In practice this map is invoked from a parent group that creates the <code class="inline">Composition</code> and iterates sections.</p>
 <pre><code>{FML['document-section']}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="document-section" />
   </Fragment>
   </Tabs>
 

@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import MapHeader from '../../components/MapHeader.astro';
 import Tabs from '../../components/Tabs.astro';
+import SqlOnFhirViews from '../../components/SqlOnFhirViews.astro';
 import { FML } from '../../data/fml';
 ---
 <Layout title="Mapping — Referral order" active="mapping">
@@ -85,6 +86,9 @@ import { FML } from '../../data/fml';
   <h2>FML mapping</h2>
   <p>Skeleton for <code class="inline">DspReferralOrder → ServiceRequest(category=referral)</code>. DSP 1.0 has not yet published the canonical referral shape, so this map covers the inferred fields.</p>
 <pre><code>{FML.referral}</code></pre>
+  </Fragment>
+  <Fragment slot="sqlOnFhir">
+    <SqlOnFhirViews slug="referral" />
   </Fragment>
   </Tabs>
 </Layout>
