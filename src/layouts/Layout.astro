@@ -5,19 +5,51 @@ export interface Props { title?: string; active?: string; }
 const { title = 'DSP ⇄ FHIR', active = '' } = Astro.props;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const nav = [
-  { href: `${base}/`,            label: 'Overview',          key: 'overview' },
-  { href: `${base}/dsp-primer`,  label: 'DSP primer',        key: 'dsp' },
-  { href: `${base}/evaluation`,  label: 'R4 / R5 / R6',      key: 'eval' },
-  { href: `${base}/graphql`,     label: '$graphql',          key: 'graphql' },
-  { href: `${base}/mapping`,     label: 'Resource mapping',  key: 'mapping' },
-  { href: `${base}/example`,     label: 'Worked example',    key: 'example' },
-  { href: `${base}/ig`,          label: 'DSP-FHIR IG',       key: 'ig' },
-  { href: `${base}/operations`,  label: 'Custom operations', key: 'operations' },
-  { href: `${base}/terminology`, label: 'Terminology',       key: 'terminology' },
-  { href: `${base}/interop`,     label: 'Interop & layering', key: 'interop' },
-  { href: `${base}/gaps`,        label: 'Gaps & extensions', key: 'gaps' },
+
+type NavLink = { href: string; label: string; key: string };
+type NavGroup = { label: string; key: string; children: NavLink[] };
+type NavItem = NavLink | NavGroup;
+
+const nav: NavItem[] = [
+  { href: `${base}/`, label: 'Overview', key: 'overview' },
+  {
+    label: 'DSP',
+    key: 'dsp',
+    children: [
+      { href: `${base}/dsp-primer`, label: 'DSP primer',  key: 'dsp' },
+      { href: `${base}/evaluation`, label: 'R4 / R5 / R6', key: 'eval' },
+    ],
+  },
+  {
+    label: 'Mapping',
+    key: 'mapping',
+    children: [
+      { href: `${base}/mapping`, label: 'Resource mapping', key: 'mapping' },
+      { href: `${base}/graphql`, label: '$graphql',         key: 'graphql' },
+      { href: `${base}/example`, label: 'Worked example',   key: 'example' },
+    ],
+  },
+  {
+    label: 'Spec',
+    key: 'spec',
+    children: [
+      { href: `${base}/ig`,          label: 'DSP-FHIR IG',      key: 'ig' },
+      { href: `${base}/operations`,  label: 'Custom operations', key: 'operations' },
+      { href: `${base}/terminology`, label: 'Terminology',       key: 'terminology' },
+    ],
+  },
+  {
+    label: 'Integration',
+    key: 'integration',
+    children: [
+      { href: `${base}/interop`, label: 'Interop & layering', key: 'interop' },
+      { href: `${base}/gaps`,    label: 'Gaps & extensions',  key: 'gaps' },
+    ],
+  },
 ];
+
+const isGroup = (n: NavItem): n is NavGroup => 'children' in n;
+const groupActive = (g: NavGroup) => g.children.some(c => c.key === active);
 ---
 <!doctype html>
 <html lang="en">
@@ -31,12 +63,28 @@ const nav = [
   <a href="#main" class="skip-link">Skip to main content</a>
   <header class="site">
     <div class="container bar">
-      <div class="brand">DSP <span class="dot" aria-hidden="true">⇄</span> FHIR</div>
+      <div class="brand"><a href={`${base}/`}>DSP <span class="dot" aria-hidden="true">⇄</span> FHIR</a></div>
       <nav aria-label="Primary">
         {nav.map(n => (
-          <a href={n.href}
-             class={active === n.key ? 'active' : ''}
-             aria-current={active === n.key ? 'page' : undefined}>{n.label}</a>
+          isGroup(n) ? (
+            <div class={`nav-group${groupActive(n) ? ' active' : ''}`}>
+              <button type="button" aria-haspopup="true" aria-expanded="false">
+                {n.label}<span class="caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="nav-dropdown" role="menu">
+                {n.children.map(c => (
+                  <a role="menuitem"
+                     href={c.href}
+                     class={active === c.key ? 'active' : ''}
+                     aria-current={active === c.key ? 'page' : undefined}>{c.label}</a>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <a href={n.href}
+               class={active === n.key ? 'active' : ''}
+               aria-current={active === n.key ? 'page' : undefined}>{n.label}</a>
+          )
         ))}
       </nav>
     </div>
