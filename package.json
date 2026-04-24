@@ -6,11 +6,16 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
+    "prebuild": "node scripts/build-ig.mjs",
     "build": "astro build",
+    "build:ig": "node scripts/build-ig.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
     "astro": "^4.16.18"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.17"
   }
 }

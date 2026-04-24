@@ -6,8 +6,31 @@ import Layout from '../layouts/Layout.astro';
   <p class="lead">
     The IG packages the mapping decisions into a shippable, validatable artifact: profiles that
     constrain R4 resources for DSP, extensions for the gaps, value sets for the enumerated DSP
-    fields, and a canonical <code class="inline">$graphql</code> query that is the DSP contract.
+    fields, <strong>DSP logical models + FML maps</strong> for executable transformation, and a
+    canonical <code class="inline">$graphql</code> query that is the DSP read contract.
   </p>
+
+  <div class="card" style="border-left:4px solid #1fb8a7">
+    <h2 style="margin-top:0">Download the draft IG package</h2>
+    <p>
+      Full source tree — sushi-config, FSH (profiles, extensions, logical models, value sets),
+      FML mapping skeletons, CapabilityStatement, OperationDefinition, narrative pages, and a
+      worked example Bundle. Ready to run through <a href="https://fshschool.org/docs/sushi/">sushi</a>
+      + the <a href="https://github.com/HL7/fhir-ig-publisher">HL7 IG Publisher</a>.
+    </p>
+    <p>
+      <a href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}/dsp-fhir-ig.zip`}
+         download
+         style="display:inline-block;padding:10px 18px;background:#1fb8a7;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">
+        ⬇ dsp-fhir-ig.zip (draft v0.1.0)
+      </a>
+    </p>
+    <p style="font-size:0.9em;color:#666;margin-bottom:0">
+      Draft / exploratory. Not an HL7 ballot artifact. Not affiliated with Microsoft or Nuance.
+      Released under CC0.
+    </p>
+  </div>
+
 
   <h2>IG metadata</h2>
   <ul class="clean">
@@ -62,6 +85,37 @@ import Layout from '../layouts/Layout.astro';
         <tr><td><code class="inline">concept-id</code></td><td>CodeableConcept</td><td><code class="inline">valueString</code> — Dragon internal concept identity.</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <h2>Logical models &amp; FML maps</h2>
+  <div class="card">
+    <p>
+      DSP is modelled as FHIR <code class="inline">StructureDefinition(kind=logical)</code> —
+      <code class="inline">DspPayload</code>, <code class="inline">DspContext</code>,
+      <code class="inline">DspTranscript</code>, <code class="inline">DspResource</code>, and
+      per-<code class="inline">content_type</code> submodels
+      (<code class="inline">DspConditionResource</code>, <code class="inline">DspOrderMedicationResource</code>,
+      <code class="inline">DspOrderImagingResource</code>, etc.). This makes DSP FHIR-native
+      enough that <code class="inline">$validate</code> works on incoming DSP, and gives FML
+      maps a typed source.
+    </p>
+    <p>
+      The draft ships executable <strong>FHIR Mapping Language</strong> skeletons:
+      <code class="inline">DspConditionToCondition.map</code> (full coverage of the DSP
+      condition payload — assertion-category routing, turn-ref / confidence / spoken-forms
+      extension generation) and
+      <code class="inline">DspMedicationOrderToMedicationRequest.map</code> (RxNorm code
+      resolution + rendered dosage instruction via the R5 xver extension). Partners compile
+      with sushi or the FML compiler and execute via
+      <code class="inline">StructureMap/$transform</code> on matchbox / HAPI — no bespoke
+      per-partner converter needed.
+    </p>
+    <p>
+      Phasing (documented in <code class="inline">fml-strategy.md</code>): P1 logical models ✓,
+      P2 deterministic 1:1 maps (2 of 6 shipped), P3 routing-split maps (immunization / study
+      / activity) — producer pre-split expected, P4 reverse FHIR→DSP maps. Grounding state
+      (R1) is explicitly <em>not</em> in FML — it's controller logic.
+    </p>
   </div>
 
   <h2>ValueSets / CodeSystems</h2>
