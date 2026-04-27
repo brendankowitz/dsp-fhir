@@ -93,10 +93,64 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for a single <code class="inline">DspDocumentSection → Composition.section</code>. In practice this map is invoked from a parent group that creates the <code class="inline">Composition</code> and iterates sections.</p>
 <pre><code>{FML['document-section']}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Each DSP document section is one entry under <code class="inline">Composition.section</code>. The reader pulls the parent Composition and maps every section to a DSP <code class="inline">document_section</code>.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspDocumentSections($id: ID!) {
+  Composition(id: $id) {
+    id status language
+    type { coding { system code display } }
+    title
+    section {
+      title
+      code { coding { system code display } }
+      text { status div }
+      entry { reference }
+
+      legacyId: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-legacy-id") {
+        valueString
+      }
+      spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-spoken-forms") {
+        valueString
+      }
+      narrativeSource: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-narrative-source") {
+        valueString
+      }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspDocumentSections(c) {
+  return c.section?.map(sec => ({
+    legacy_id: sec.legacyId?.[0]?.valueString,
+    context: {
+      content_type: 'document_section',
+      display_description: sec.title,
+      codes: (sec.code?.coding ?? []).map(toDspCode),
+      spoken_forms: sec.spokenForms?.map(e => e.valueString) ?? [],
+    },
+    // Prefer the unwrapped narrative source extension over re-parsing the XHTML div
+    content: sec.narrativeSource?.[0]?.valueString
+          ?? unwrapXhtml(sec.text?.div),
+    entries: sec.entry?.map(e => e.reference) ?? [],
+  })) ?? [];
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> The original plain-text content is preserved on
+    <code class="inline">dsp-narrative-source</code>; the adapter prefers it over re-parsing the
+    XHTML <code class="inline">div</code> (which would risk entity-decoding artifacts). Section
+    entries are recovered as references for downstream resolution.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="document-section" />

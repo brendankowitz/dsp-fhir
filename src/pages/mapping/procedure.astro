@@ -92,10 +92,71 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspProcedureOrder → ServiceRequest(category=procedure)</code>. The downstream performed <code class="inline">Procedure</code> resource is created by a separate map.</p>
 <pre><code>{FML.procedure}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Standard FHIR <code class="inline">$graphql</code> selects every native ServiceRequest field and the <code class="inline">dsp-procedure-devices</code> extension. The performed Procedure (when it materializes downstream) is queried separately.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspProcedureOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent
+    code { text coding { system code display } }
+    performer { reference display }
+    locationReference { reference display }
+    patientInstruction
+    note { text }
+    reasonCode { text }
+    reasonReference { reference }
+
+    devices: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-procedure-devices") {
+      device: extension(url: "device") { valueString }
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspProcedureOrder(s) {
+  const turnRefs = s.turnRefs ?? [];
+  return {
+    id: s.id,
+    type: 'PROCEDURE_ORDER',
+    intent: s.intent,
+    description: s.code?.text,
+    reason: s.reasonCode?.[0]?.text,
+    reason_references: s.reasonReference?.map(r => r.reference),
+    order_data: {
+      procedure: {
+        text: s.code?.text,
+        codes: (s.code?.coding ?? []).map(toDspCode),
+      },
+      surgical_team:      s.performer?.map(p => p.display ?? p.reference),
+      procedure_location: s.locationReference?.[0]?.display ?? s.locationReference?.[0]?.reference,
+      devices:            (s.devices?.[0]?.device ?? []).map(d => d.valueString),
+      instructions:       s.patientInstruction ?? s.note?.map(n => n.text).join('\\n'),
+    },
+    confidence_score: s.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Every DSP-originated field has a declared FHIR landing — native or
+    <code class="inline">dsp-*</code> extension.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="procedure" />

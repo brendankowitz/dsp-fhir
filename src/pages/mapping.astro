@@ -82,7 +82,7 @@ import SqlOnFhirViews from '../components/SqlOnFhirViews.astro';
       </div>
     </Fragment>
 
-    <Fragment slot="fml">
+    <Fragment slot="dspToFhir">
 <pre><code>{`map "https://dsp-fhir.org/StructureMap/DspEnvelopeToBundle" = "DspEnvelopeToBundle"
 
 uses "https://dsp-fhir.org/StructureDefinition/DspPayload" alias DspPayload as source
@@ -106,6 +106,50 @@ group Envelope(source src : DspPayload, target bnd : Bundle) {
   src.external_callback_url as u -> bnd.entry.resource.extension as ext then {
     u -> ext.url = 'https://dsp-fhir.org/StructureDefinition/dsp-external-callback-url',
          ext.value = u;
+  };
+}`}</code></pre>
+    </Fragment>
+    <Fragment slot="fhirToDsp">
+<pre><code>{`# Reconstruct the DSP envelope (payload_version, priority, callback_url)
+# from the Bundle root + the Encounter that anchors the document.
+query DspEnvelope($bundleId: ID!) {
+  Bundle(id: $bundleId) {
+    id
+    meta {
+      payloadVersion: extension(url: "https://dsp-fhir.org/StructureDefinition/payload-version") {
+        major:    extension(url: "major")    { valueInteger }
+        minor:    extension(url: "minor")    { valueInteger }
+        revision: extension(url: "revision") { valueInteger }
+        quality:  extension(url: "quality")  { valueCode }
+      }
+    }
+    entry {
+      resource {
+        ... on Encounter {
+          id
+          priority { coding { system code display } }
+          callbackUrl: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-external-callback-url") {
+            valueUrl
+          }
+        }
+      }
+    }
+  }
+}
+
+// Adapter (envelope is a header object, not a list)
+function toDspEnvelope(b) {
+  const enc = b.entry.map(e => e.resource).find(r => r.priority || r.callbackUrl);
+  const pv  = b.meta?.payloadVersion?.[0];
+  return {
+    payload_version: pv && {
+      major:    pv.major?.[0]?.valueInteger,
+      minor:    pv.minor?.[0]?.valueInteger,
+      revision: pv.revision?.[0]?.valueInteger,
+      quality:  pv.quality?.[0]?.valueCode,
+    },
+    priority:               enc?.priority?.coding?.[0]?.code,
+    external_callback_url:  enc?.callbackUrl?.[0]?.valueUrl,
   };
 }`}</code></pre>
     </Fragment>
@@ -231,7 +275,7 @@ group Envelope(source src : DspPayload, target bnd : Bundle) {
       </div>
     </Fragment>
 
-    <Fragment slot="fml">
+    <Fragment slot="dspToFhir">
 <pre><code>{`map "https://dsp-fhir.org/StructureMap/DspEncounterToFhir" = "DspEncounterToFhir"
 
 uses "https://dsp-fhir.org/StructureDefinition/DspEncounter" alias DspEncounter as source
@@ -280,6 +324,74 @@ group PatientBlock(source src : DspPatient, target pat : Patient) {
     p -> ext.url = 'http://hl7.org/fhir/us/core/StructureDefinition/us-core-pronouns',
          ext.value.coding.system = 'http://loinc.org',
          ext.value.coding.display = p;
+  };
+}`}</code></pre>
+    </Fragment>
+    <Fragment slot="fhirToDsp">
+<pre><code>{`# Reconstruct the DSP encounter block from Encounter + Patient + Practitioner.
+query DspEncounterBlock($encId: ID!) {
+  Encounter(id: $encId) {
+    id status
+    period { start end }
+    class { system code display }
+    identifier {
+      system value
+      type { coding { system code display } }
+    }
+    participant {
+      type { coding { system code display } }
+      individual { reference display }
+    }
+
+    tenantOrg: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-tenant-organization") {
+      valueReference { reference }
+    }
+    locale: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-recording-locale") { valueCode }
+    timezone: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-timezone") { valueString }
+
+    subject { resource { ... on Patient {
+      id gender birthDate
+      identifier {
+        system value
+        type { coding { system code display } }
+      }
+      name { text family given }
+      pronouns: extension(url: "http://hl7.org/fhir/us/core/StructureDefinition/us-core-pronouns") {
+        valueCodeableConcept { coding { system code display } }
+      }
+    }}}
+  }
+}
+
+// Adapter
+function toDspEncounterBlock(enc) {
+  const pat = enc.subject?.resource;
+  const mrn = pat?.identifier?.find(i => i.type?.coding?.[0]?.code === 'MR')?.value;
+  return {
+    encounter: {
+      date_of_encounter: enc.period?.start,
+      status: enc.status,
+      correlation_id: enc.identifier?.find(i => i.system === 'https://dsp-fhir.org/correlation-id')?.value,
+      external_encounter_ids: enc.identifier
+        ?.filter(i => i.system && i.system !== 'https://dsp-fhir.org/correlation-id')
+        ?.map(i => ({ system: i.system, value: i.value, type: i.type?.coding?.[0]?.code })),
+    },
+    patient: {
+      medical_record_number: mrn,
+      name:      pat?.name?.[0]?.text,
+      gender:    pat?.gender,
+      birthdate: pat?.birthDate,
+      pronoun_preference: pat?.pronouns?.[0]?.valueCodeableConcept?.coding?.[0]?.display,
+    },
+    visit: {
+      visit_type:      enc.class?.code,
+      admission_date:  enc.period?.start,
+      discharge_date:  enc.period?.end,
+      accompanied_by:  enc.participant?.find(p => p.type?.coding?.[0]?.code === 'ESC')?.individual?.display,
+    },
+    organization_id:    enc.tenantOrg?.[0]?.valueReference?.reference?.replace('Organization/', ''),
+    recording_locales:  enc.locale ? [enc.locale[0]?.valueCode] : undefined,
+    timezone:           enc.timezone?.[0]?.valueString,
   };
 }`}</code></pre>
     </Fragment>
@@ -391,7 +503,7 @@ group PatientBlock(source src : DspPatient, target pat : Patient) {
       </div>
     </Fragment>
 
-    <Fragment slot="fml">
+    <Fragment slot="dspToFhir">
 <pre><code>{`map "https://dsp-fhir.org/StructureMap/DspRecordingsToFhir" = "DspRecordingsToFhir"
 
 uses "https://dsp-fhir.org/StructureDefinition/DspRecording" alias DspRecording as source
@@ -430,6 +542,74 @@ group Transcript(source t : DspTranscript, target dr : DocumentReference) {
   t.speaker_count as sc -> dr.extension as ext then {
     sc -> ext.url = 'https://dsp-fhir.org/StructureDefinition/transcript-speaker-count',
           ext.value = sc;
+  };
+}`}</code></pre>
+    </Fragment>
+    <Fragment slot="fhirToDsp">
+<pre><code>{`# Reconstruct DSP recordings, sessions, and transcript metadata from
+# Media, Provenance, and DocumentReference for one encounter.
+query DspRecordingsAndTranscript($encId: ID!) {
+  recordings: MediaList(encounter: $encId) {
+    id status
+    type { coding { system code display } }
+    createdPeriod { start end }
+    content { contentType url }
+    source: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-recording-source") {
+      valueCode
+    }
+  }
+
+  sessions: ProvenanceList(target: $encId) {
+    id recorded
+    activity { coding { system code display } }
+    agent {
+      type { coding { system code display } }
+      who { reference }
+    }
+  }
+
+  transcripts: DocumentReferenceList(encounter: $encId, category: "https://dsp-fhir.org/CodeSystem/doc-category|transcript") {
+    id status
+    type { coding { system code display } }
+    content { attachment { url contentType language } }
+    context { period { start end } }
+    speakerCount: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-speaker-count") {
+      valuePositiveInt
+    }
+  }
+}
+
+// Adapters
+function toDspRecording(m) {
+  return {
+    id: m.id,
+    start_time: m.createdPeriod?.start,
+    end_time:   m.createdPeriod?.end,
+    media_url:  m.content?.url,
+    content_type: m.content?.contentType,
+    source: m.source?.[0]?.valueCode,
+  };
+}
+
+function toDspSession(p) {
+  const practitioner = p.agent?.find(a => a.who?.reference?.startsWith('Practitioner/'));
+  const org          = p.agent?.find(a => a.who?.reference?.startsWith('Organization/'));
+  return {
+    id: p.id,
+    start_time: p.recorded,
+    agent: {
+      user_id: practitioner?.who?.reference?.replace('Practitioner/', ''),
+      org_id:  org?.who?.reference?.replace('Organization/', ''),
+    },
+  };
+}
+
+function toDspTranscript(refs) {
+  const dr = refs?.[0];
+  return dr && {
+    transcript_ref: dr.id,
+    transcript_url: dr.content?.[0]?.attachment?.url,
+    speaker_count:  dr.speakerCount?.[0]?.valuePositiveInt,
   };
 }`}</code></pre>
     </Fragment>
@@ -508,7 +688,7 @@ group Transcript(source t : DspTranscript, target dr : DocumentReference) {
       </div>
     </Fragment>
 
-    <Fragment slot="fml">
+    <Fragment slot="dspToFhir">
 <pre><code>{`map "https://dsp-fhir.org/StructureMap/DspDocumentToComposition" = "DspDocumentToComposition"
 
 uses "https://dsp-fhir.org/StructureDefinition/DspDocument" alias DspDocument as source
@@ -533,6 +713,36 @@ group SectionToFhirSection(source ds : DspSection, target sec : Composition.Sect
   ds.text as txt -> sec.text as narr then {
     txt -> narr.status = 'generated',
            narr.div    = ('<div xmlns="http://www.w3.org/1999/xhtml">' + txt + '</div>');
+  };
+}`}</code></pre>
+    </Fragment>
+  <Fragment slot="fhirToDsp">
+<pre><code>{`# Reconstruct DSP document metadata + sections from the Composition.
+# Per-section reconstruction reuses toDspDocumentSection() from /mapping/document-section.
+query DspDocument($id: ID!) {
+  Composition(id: $id) {
+    id status language
+    type { coding { system code display } }
+    title
+    section {
+      title
+      code { coding { system code display } }
+      text { status div }
+      entry { reference }
+      narrativeSource: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-narrative-source") {
+        valueString
+      }
+    }
+  }
+}
+
+// Adapter
+function toDspDocument(c) {
+  return {
+    document_type:   c.type?.coding?.find(x => x.system === 'http://loinc.org')?.code,
+    document_status: c.status,
+    report_locale:   c.language,
+    sections: c.section?.map(toDspDocumentSection) ?? [],
   };
 }`}</code></pre>
     </Fragment>
@@ -684,7 +894,7 @@ group SectionToFhirSection(source ds : DspSection, target sec : Composition.Sect
       </div>
     </Fragment>
 
-    <Fragment slot="fml">
+    <Fragment slot="dspToFhir">
 <pre><code>{`map "https://dsp-fhir.org/StructureMap/DspCrossCutting" = "DspCrossCutting"
 
 // These rules apply to any DSP resource with an Element-level 'context' block.
@@ -744,6 +954,50 @@ group CrossCutting(source src : DspResourceFragment, target dst : Resource) {
 
 // update_status is NOT a forward map: it's derived on read from
 // meta.versionId + Provenance.activity. No FML rule; see operations: $everything?_since=.`}</code></pre>
+    </Fragment>
+    <Fragment slot="fhirToDsp">
+<pre><code>{`# Cross-cutting fragment: every DSP-originated metadata field carried on
+# any FHIR resource. Inline this fragment into each resource selection.
+fragment DspCrossCutting on Resource {
+  meta { profile source }
+
+  confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+    valueDecimal
+  }
+  spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-spoken-forms") {
+    valueString
+  }
+  searchTerms: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-search-terms") {
+    valueString
+  }
+  source: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-resource-source") {
+    valueCode
+  }
+
+  # One extension per turn ref; each carries its own version-pinned transcript reference (R1).
+  turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+    transcript: extension(url: "transcript") { valueReference { reference } }
+    turn:       extension(url: "turn")       { valueInteger }
+  }
+}
+
+// Adapter (composes with each resource's per-type adapter)
+function applyDspCrossCutting(r, dst) {
+  const turnRefs = r.turnRefs ?? [];
+  return {
+    ...dst,
+    confidence_score: r.confidence?.[0]?.valueDecimal,
+    spoken_forms:     r.spokenForms?.map(e => e.valueString) ?? [],
+    search_terms:     r.searchTerms?.map(e => e.valueString) ?? [],
+    source:           { type: r.source?.[0]?.valueCode, ref: r.meta?.source },
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}
+
+// Note: update_status is derived on read from meta.versionId + Provenance.activity (R4).
+// External-reference + linkage-confidence are recovered from Resource.identifier and
+// the dsp-linkage-confidence extension on it — see per-resource adapters.`}</code></pre>
     </Fragment>
   </Tabs>
 

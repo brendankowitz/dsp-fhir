@@ -84,10 +84,83 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspImagingOrder → ServiceRequest(category=imaging)</code>.</p>
 <pre><code>{FML.imaging}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Standard FHIR <code class="inline">$graphql</code> selects every native ServiceRequest field and DSP-namespaced extension. The imaging-specific extensions (<code class="inline">dsp-imaging-modality</code>, <code class="inline">dsp-imaging-views</code>, <code class="inline">dsp-imaging-contrast</code>, <code class="inline">dsp-bodysite-laterality</code>) carry the structured codings the DSP wording can't recover by itself.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspImagingOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent
+    category { coding { system code display } }
+    code { text coding { system code display } }
+    bodySite {
+      coding { system code display }
+      text
+      laterality: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-bodysite-laterality") {
+        valueCode
+      }
+    }
+    note { text }
+    patientInstruction
+    reasonCode { text }
+
+    modality: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-imaging-modality") {
+      valueCoding { system code display }
+    }
+    views: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-imaging-views") {
+      valueString
+    }
+    contrast: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-imaging-contrast") {
+      valueCode
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspImagingOrder(s) {
+  const body = s.bodySite?.[0];
+  const turnRefs = s.turnRefs ?? [];
+  return {
+    id: s.id,
+    type: 'IMAGING_ORDER',
+    intent: s.intent,
+    description: s.code?.text,
+    order_data: {
+      imaging_modality:            s.modality?.[0]?.valueCoding?.display,
+      imaging_modality_code:       s.modality?.[0]?.valueCoding?.code,
+      imaging_body_location:       body?.text ?? body?.coding?.[0]?.display,
+      imaging_location_laterality: body?.laterality?.[0]?.valueCode,
+      views:    s.views?.map(v => v.valueString).join(', '),
+      contrast: s.contrast?.[0]?.valueCode,
+      imaging_instructions: s.note?.map(n => n.text).join('\\n'),
+      patient_instructions: s.patientInstruction,
+    },
+    reason: s.reasonCode?.[0]?.text,
+    confidence_score: s.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Modality, views, contrast and laterality are all preserved on
+    structured <code class="inline">dsp-imaging-*</code> extensions — the original DSP free-text
+    is recoverable.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="imaging" />

@@ -1,12 +1,23 @@
 ---
 interface Props {
-  labels?: { summary?: string; example?: string; fml?: string; sqlOnFhir?: string };
+  labels?: {
+    summary?: string;
+    example?: string;
+    fml?: string;
+    dspToFhir?: string;
+    fhirToDsp?: string;
+    sqlOnFhir?: string;
+  };
 }
 const { labels = {} } = Astro.props as Props;
+const hasDspToFhir = Astro.slots.has('dspToFhir') || Astro.slots.has('fml');
+const hasFhirToDsp = Astro.slots.has('fhirToDsp');
+const hasSqlOnFhir = Astro.slots.has('sqlOnFhir');
 const L = {
   summary: labels.summary ?? 'Summary',
   example: labels.example ?? 'Example',
-  fml: labels.fml ?? 'FML mapping',
+  dspToFhir: labels.dspToFhir ?? labels.fml ?? 'DSP → FHIR (FML)',
+  fhirToDsp: labels.fhirToDsp ?? 'FHIR → DSP ($graphql)',
   sqlOnFhir: labels.sqlOnFhir ?? 'SQL-on-FHIR',
 };
 ---
@@ -14,13 +25,15 @@ const L = {
   <div class="tab-buttons" role="tablist">
     <button type="button" class="tab-btn active" data-tab="summary" role="tab" aria-selected="true">{L.summary}</button>
     <button type="button" class="tab-btn" data-tab="example" role="tab" aria-selected="false">{L.example}</button>
-    <button type="button" class="tab-btn" data-tab="fml" role="tab" aria-selected="false">{L.fml}</button>
-    <button type="button" class="tab-btn" data-tab="sqlOnFhir" role="tab" aria-selected="false">{L.sqlOnFhir}</button>
+    {hasDspToFhir && <button type="button" class="tab-btn" data-tab="dspToFhir" role="tab" aria-selected="false">{L.dspToFhir}</button>}
+    {hasFhirToDsp && <button type="button" class="tab-btn" data-tab="fhirToDsp" role="tab" aria-selected="false">{L.fhirToDsp}</button>}
+    {hasSqlOnFhir && <button type="button" class="tab-btn" data-tab="sqlOnFhir" role="tab" aria-selected="false">{L.sqlOnFhir}</button>}
   </div>
   <div class="tab-panel active" data-panel="summary" role="tabpanel"><slot name="summary" /></div>
   <div class="tab-panel" data-panel="example" role="tabpanel"><slot name="example" /></div>
-  <div class="tab-panel" data-panel="fml" role="tabpanel"><slot name="fml" /></div>
-  <div class="tab-panel" data-panel="sqlOnFhir" role="tabpanel"><slot name="sqlOnFhir" /></div>
+  {hasDspToFhir && <div class="tab-panel" data-panel="dspToFhir" role="tabpanel"><slot name="dspToFhir"><slot name="fml" /></slot></div>}
+  {hasFhirToDsp && <div class="tab-panel" data-panel="fhirToDsp" role="tabpanel"><slot name="fhirToDsp" /></div>}
+  {hasSqlOnFhir && <div class="tab-panel" data-panel="sqlOnFhir" role="tabpanel"><slot name="sqlOnFhir" /></div>}
 </div>
 
 <script is:inline>

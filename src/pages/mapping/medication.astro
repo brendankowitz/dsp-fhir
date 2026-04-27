@@ -95,10 +95,113 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Executable FHIR Mapping Language skeleton for <code class="inline">DspMedicationOrder → MedicationRequest</code>. The full map ships in the <a href="/dsp-fhir/ig">downloadable IG package</a>.</p>
 <pre><code>{FML.medication}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Standard FHIR <code class="inline">$graphql</code> selects every native MedicationRequest field and DSP-namespaced extension that the write projection populated. A small adapter renames the result into the DSP shape — no FML inverse engine required.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspMedicationOrder($id: ID!) {
+  MedicationRequest(id: $id) {
+    id status intent
+    meta { profile source versionId lastUpdated }
+
+    medicationCodeableConcept {
+      text
+      coding { system code display }
+    }
+    medicationReference { reference }
+
+    reasonCode { text coding { system code display } }
+    reasonReference { reference }
+
+    dosageInstruction {
+      text
+      asNeededBoolean
+      timing {
+        repeat {
+          frequency period periodUnit
+          boundsDuration { value unit system code }
+        }
+      }
+      route { coding { system code display } text }
+      doseAndRate {
+        doseQuantity { value unit system code }
+      }
+    }
+    dispenseRequest {
+      numberOfRepeatsAllowed
+      quantity { value unit }
+    }
+    note { text }
+
+    rendered: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-rendered-dosage-instruction") {
+      valueString
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-spoken-forms") {
+      valueString
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspMedicationOrder(m) {
+  const med = m.medicationCodeableConcept;
+  const di  = m.dosageInstruction?.[0];
+  const turnRefs = m.turnRefs ?? [];
+  return {
+    id: m.id,
+    type: 'MEDICATION_ORDER',
+    intent: m.intent,
+    description: m.rendered?.[0]?.valueString ?? di?.text,
+    reason: m.reasonCode?.[0]?.text,
+    reason_references: m.reasonReference?.map(r => r.reference),
+    order_data: {
+      medication: {
+        text: med?.text,
+        codes: (med?.coding ?? []).map(toDspCode),
+      },
+      dosage:      di?.doseAndRate?.[0]?.doseQuantity?.value,
+      dosage_unit: di?.doseAndRate?.[0]?.doseQuantity?.unit,
+      route_coded: { codes: (di?.route?.coding ?? []).map(toDspCode) },
+      frequency: di?.timing?.repeat ? {
+        count:       di.timing.repeat.frequency,
+        period:      di.timing.repeat.period,
+        period_unit: di.timing.repeat.periodUnit,
+        prn:         di.asNeededBoolean,
+      } : undefined,
+      duration: di?.timing?.repeat?.boundsDuration && {
+        value: di.timing.repeat.boundsDuration.value,
+        unit:  di.timing.repeat.boundsDuration.unit,
+      },
+      refills:  m.dispenseRequest?.numberOfRepeatsAllowed,
+      dispense: m.dispenseRequest?.quantity?.value,
+      notes:    m.note?.map(n => n.text),
+    },
+    confidence_score: m.confidence?.[0]?.valueDecimal,
+    spoken_forms:     m.spokenForms?.map(e => e.valueString) ?? [],
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> The free-text dosing narrative is preserved exactly on
+    <code class="inline">dsp-rendered-dosage-instruction</code> (the adapter prefers it over the
+    structured <code class="inline">dosageInstruction.text</code> reconstruction).
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="medication" />

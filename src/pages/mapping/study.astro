@@ -123,10 +123,98 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Routing-split map — the FML below covers the diagnostic-study branch. The research-enrollment branch is sketched as a comment.</p>
 <pre><code>{FML.study}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    DSP <code class="inline">STUDY_ORDER</code> routes to two FHIR resource types. The reader runs the matching query and dispatches to the right adapter.
+  </p>
+  <h3>Canonical query (diagnostic branch — <code class="inline">ServiceRequest</code>)</h3>
+<pre><code>{`query DspStudyOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent priority occurrenceDateTime
+    category { coding { system code display } }
+    code { text coding { system code display } }
+    patientInstruction
+    reasonCode { text }
+    reasonReference { reference }
+    instantiatesUri
+
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>Canonical query (research branch — <code class="inline">ResearchSubject</code>)</h3>
+<pre><code>{`query DspStudyEnrollment($id: ID!) {
+  ResearchSubject(id: $id) {
+    id status
+    period { start end }
+    individual { reference }
+    study {
+      reference
+      resource {
+        ... on ResearchStudy {
+          id title
+          identifier { system value }
+        }
+      }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspStudyOrder(r) {
+  if (r.__typename === 'ResearchSubject' || r.individual) {
+    const study = r.study?.resource;
+    return {
+      id: r.id,
+      type: 'STUDY_ORDER',
+      intent: 'order',
+      order_data: {
+        study_id:        study?.identifier?.find(i => i.system?.includes('clinicaltrials'))?.value,
+        study_title:     study?.title,
+        enrollment_date: r.period?.start,
+        enrollment_status: r.status,
+      },
+    };
+  }
+  // Diagnostic branch
+  const turnRefs = r.turnRefs ?? [];
+  return {
+    id: r.id,
+    type: 'STUDY_ORDER',
+    intent: r.intent,
+    description: r.code?.text,
+    reason: r.reasonCode?.[0]?.text,
+    order_data: {
+      study_code:        r.code?.coding?.[0]?.code,
+      study_code_system: r.code?.coding?.[0]?.system,
+      modality:          r.category?.find(c => c.coding?.[0]?.system?.includes('study-modality'))?.coding?.[0]?.code,
+      priority:          r.priority,
+      scheduled_for:     r.occurrenceDateTime,
+      preparation:       r.patientInstruction,
+      protocol:          r.instantiatesUri,
+    },
+    confidence_score: r.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> The routing split is recovered from the FHIR resource type;
+    each branch's fields land natively.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="study" />

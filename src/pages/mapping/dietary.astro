@@ -97,10 +97,86 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspDietaryOrder → NutritionOrder</code>. The cleanest one-to-one shape of any DSP order type.</p>
 <pre><code>{FML.dietary}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    NutritionOrder is the cleanest one-to-one DSP order — most fields land on native FHIR slots.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspDietaryOrder($id: ID!) {
+  NutritionOrder(id: $id) {
+    id status intent dateTime
+    oralDiet {
+      type { coding { system code display } text }
+      texture { modifier { coding { system code display } text } }
+      fluidConsistencyType { coding { system code display } text }
+      schedule { repeat { frequency period periodUnit } }
+      instruction
+    }
+    excludeFoodModifier { coding { system code display } text }
+    foodPreferenceModifier { coding { system code display } text }
+    supplement {
+      type { coding { system code display } }
+      productName
+      quantity { value unit }
+    }
+    enteralFormula { baseFormulaType { coding { system code display } } }
+    note { text }
+    reasonCode { text }
+    reasonReference { reference }
+
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspDietaryOrder(n) {
+  const od = n.oralDiet;
+  const turnRefs = n.turnRefs ?? [];
+  return {
+    id: n.id,
+    type: 'DIETARY_ORDER',
+    intent: n.intent,
+    description: od?.type?.[0]?.text ?? od?.type?.[0]?.coding?.[0]?.display,
+    reason: n.reasonCode?.[0]?.text,
+    reason_references: n.reasonReference?.map(r => r.reference),
+    order_data: {
+      diet_type:         od?.type?.map(t => t.coding?.[0]?.code ?? t.text),
+      texture:           od?.texture?.map(t => t.modifier?.coding?.[0]?.code ?? t.modifier?.text),
+      fluid_consistency: od?.fluidConsistencyType?.[0]?.coding?.[0]?.code,
+      exclusions:        n.excludeFoodModifier?.map(e => e.coding?.[0]?.code ?? e.text),
+      food_preferences:  n.foodPreferenceModifier?.map(p => p.coding?.[0]?.code ?? p.text),
+      supplements:       n.supplement?.map(s => ({
+                            type:     s.type?.coding?.[0]?.code,
+                            product:  s.productName,
+                            quantity: s.quantity?.value,
+                            unit:     s.quantity?.unit,
+                         })),
+      enteral_formula: n.enteralFormula?.baseFormulaType?.coding?.[0]?.code,
+      schedule:        od?.schedule?.repeat,
+      instructions:    od?.instruction ?? n.note?.map(x => x.text).join('\\n'),
+    },
+    confidence_score: n.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> NutritionOrder is the best-fit FHIR resource for DSP dietary —
+    every field lands natively.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="dietary" />

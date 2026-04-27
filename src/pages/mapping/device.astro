@@ -83,10 +83,84 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspDeviceOrder → DeviceRequest</code>. Downstream <code class="inline">DeviceUseStatement</code> (R4) / <code class="inline">DeviceUsage</code> (R5) is out of scope for this map.</p>
 <pre><code>{FML.device}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    DeviceRequest carries device identity, parameters and timing natively; DSP body site is recovered from the cross-version <code class="inline">dsp-device-body-site</code> extension.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspDeviceOrder($id: ID!) {
+  DeviceRequest(id: $id) {
+    id status intent
+    codeCodeableConcept { text coding { system code display } }
+    codeReference { reference }
+    quantityQuantity { value unit }
+    occurrenceTiming {
+      repeat {
+        boundsDuration { value unit system code }
+      }
+    }
+    parameter {
+      code { text coding { system code display } }
+      valueQuantity { value unit system code }
+      valueCodeableConcept { coding { system code display } }
+    }
+    patientInstruction
+    note { text }
+    reasonCode { text }
+    reasonReference { reference }
+
+    bodySite: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-device-body-site") {
+      valueCodeableConcept { coding { system code display } text }
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspDeviceOrder(d) {
+  const dur = d.occurrenceTiming?.repeat?.boundsDuration;
+  const turnRefs = d.turnRefs ?? [];
+  return {
+    id: d.id,
+    type: 'DEVICE_ORDER',
+    intent: d.intent,
+    description: d.codeCodeableConcept?.text ?? d.codeCodeableConcept?.coding?.[0]?.display,
+    reason: d.reasonCode?.[0]?.text,
+    reason_references: d.reasonReference?.map(r => r.reference),
+    order_data: {
+      device_code:        d.codeCodeableConcept?.coding?.[0]?.code,
+      device_code_system: d.codeCodeableConcept?.coding?.[0]?.system,
+      body_site:          d.bodySite?.[0]?.valueCodeableConcept?.coding?.[0]?.code,
+      duration:           dur && { value: dur.value, unit: dur.code ?? dur.unit },
+      quantity:           d.quantityQuantity?.value,
+      parameters: d.parameter?.map(p => ({
+        code:  p.code?.text ?? p.code?.coding?.[0]?.code,
+        value: p.valueQuantity?.value ?? p.valueCodeableConcept?.coding?.[0]?.code,
+        unit:  p.valueQuantity?.code ?? p.valueQuantity?.unit,
+      })),
+      instruction: d.patientInstruction,
+    },
+    confidence_score: d.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Parameters and body site are recoverable.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="device" />

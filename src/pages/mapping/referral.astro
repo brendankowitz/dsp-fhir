@@ -82,10 +82,65 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspReferralOrder → ServiceRequest(category=referral)</code>. DSP 1.0 has not yet published the canonical referral shape, so this map covers the inferred fields.</p>
 <pre><code>{FML.referral}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Standard FHIR <code class="inline">$graphql</code> selects every native ServiceRequest field used by the referral profile.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspReferralOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent priority
+    code { text coding { system code display } }
+    performerType { text coding { system code display } }
+    performer { reference display }
+    reasonCode { text }
+    reasonReference { reference }
+    supportingInfo { reference }
+
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspReferralOrder(s) {
+  const turnRefs = s.turnRefs ?? [];
+  return {
+    id: s.id,
+    type: 'REFERRAL_ORDER',
+    intent: s.intent,
+    description: s.code?.text,
+    reason: s.reasonCode?.[0]?.text,
+    reason_references: s.reasonReference?.map(r => r.reference),
+    order_data: {
+      specialty: {
+        text: s.performerType?.text ?? s.performerType?.coding?.[0]?.display,
+        codes: (s.performerType?.coding ?? []).map(toDspCode),
+      },
+      to_provider: s.performer?.[0]?.display ?? s.performer?.[0]?.reference,
+      urgency:     s.priority,
+      supporting_documents: s.supportingInfo?.map(r => r.reference),
+    },
+    confidence_score: s.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Every DSP-originated field maps to a native FHIR field.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="referral" />

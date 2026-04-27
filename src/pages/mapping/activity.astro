@@ -115,10 +115,95 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspActivityOrder → CarePlan.activity[]</code>. Per-activity confidence isn't expressible on <code class="inline">activity.detail</code>; callers needing it should emit standalone <code class="inline">ServiceRequest</code>s and link via <code class="inline">activity.reference</code> (see callout below).</p>
 <pre><code>{FML.activity}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Each DSP activity item lives under <code class="inline">CarePlan.activity</code>. The reader pulls the encounter-scoped CarePlan and reconstructs DSP's <code class="inline">order_data.items[]</code>.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspActivityOrder($id: ID!) {
+  CarePlan(id: $id) {
+    id status intent
+    addresses { reference }
+    activity {
+      detail {
+        kind status prohibited
+        code { coding { system code display } }
+        description
+        quantity { value unit system code }
+        scheduledTiming {
+          repeat {
+            frequency period periodUnit
+            boundsDuration { value unit system code }
+          }
+        }
+        weightLimit: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-weight-limit") {
+          valueQuantity { value unit system code }
+        }
+      }
+      reference { reference }
+    }
+
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspActivityOrder(p) {
+  const turnRefs = p.turnRefs ?? [];
+  return {
+    id: p.id,
+    type: 'ACTIVITY_ORDER',
+    intent: p.intent,
+    reason_references: p.addresses?.map(a => a.reference),
+    order_data: {
+      items: p.activity?.map(a => {
+        const d  = a.detail;
+        const r  = d?.scheduledTiming?.repeat;
+        const wl = d?.weightLimit?.[0]?.valueQuantity;
+        return {
+          activity_code:        d?.code?.coding?.[0]?.code,
+          activity_code_system: d?.code?.coding?.[0]?.system,
+          prohibited:           d?.prohibited,
+          description:          d?.description,
+          quantity:             d?.quantity && { value: d.quantity.value, unit: d.quantity.code ?? d.quantity.unit },
+          frequency_per_day:    r?.periodUnit === 'd' ? r?.frequency : undefined,
+          duration:             r?.boundsDuration && { value: r.boundsDuration.value, unit: r.boundsDuration.code ?? r.boundsDuration.unit },
+          restriction_limit:    wl && { value: wl.value, unit: wl.code ?? wl.unit },
+          // Per-activity provenance lives on a sibling ServiceRequest if needed
+          serviceRequestRef:    a.reference?.reference,
+        };
+      }) ?? [],
+    },
+    confidence_score: p.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout warn">
+    <strong>One known limitation, by design.</strong> <code class="inline">CarePlan.activity.detail</code>
+    is a sub-record, not a full resource, so per-activity confidence/turn-refs cannot be carried on it.
+    When DSP needs per-item provenance, the producer emits each item as a standalone
+    <code class="inline">ServiceRequest</code> and links it via <code class="inline">activity.reference</code>;
+    the adapter follows the reference and inherits the per-item metadata from there.
+  </div>
+
+  <div class="callout ok">
+    <strong>No data loss</strong> when the per-item ServiceRequest pattern is used. CarePlan-level
+    confidence/turn-refs cover the order envelope.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="activity" />

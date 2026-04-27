@@ -94,10 +94,74 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspLabOrder → ServiceRequest(category=laboratory)</code>. The companion <code class="inline">Specimen</code> is created by a sibling group not shown here.</p>
 <pre><code>{FML.lab}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    Standard FHIR <code class="inline">$graphql</code> selects every native ServiceRequest field and DSP-namespaced extension that the write projection populated. A small adapter renames the result into the DSP shape.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspLabOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent
+    category { coding { system code display } }
+    code {
+      text
+      coding { system code display }
+    }
+    specimen { reference }
+    note { text }
+    patientInstruction
+    reasonCode { text }
+    reasonReference { reference }
+
+    abbreviation: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-abbreviation") {
+      valueString
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspLabOrder(s) {
+  const turnRefs = s.turnRefs ?? [];
+  return {
+    id: s.id,
+    type: 'LAB_ORDER',
+    intent: s.intent,
+    description: s.code?.text,
+    order_data: {
+      lab: {
+        text: s.code?.text,
+        codes: (s.code?.coding ?? []).map(toDspCode),
+      },
+      lab_abbreviation:    s.abbreviation?.[0]?.valueString,
+      sample_type:         s.specimen?.[0]?.reference,
+      lab_instructions:    s.note?.map(n => n.text).join('\\n'),
+      patient_instructions: s.patientInstruction,
+    },
+    reason: s.reasonCode?.[0]?.text,
+    reason_references: s.reasonReference?.map(r => r.reference),
+    confidence_score: s.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Every DSP-originated field has a declared FHIR landing — native or
+    <code class="inline">dsp-*</code> extension — and the canonical read selects each one explicitly.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="lab" />

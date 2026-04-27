@@ -18,30 +18,34 @@ import { FML } from '../../data/fml';
   <h2>Field-by-field</h2>
   <div class="card" style="padding:0">
     <table>
-      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Notes</th></tr></thead>
+      <thead><tr><th>DSP</th><th>FHIR R4</th><th>Round-trip mechanism</th></tr></thead>
       <tbody>
-        <tr><td><code class="inline">id</code></td><td><code class="inline">Condition.id</code> or <code class="inline">identifier</code></td><td>DSP ids are internal; FHIR <code class="inline">id</code> is server-assigned.</td></tr>
-        <tr><td><code class="inline">description</code></td><td><code class="inline">Condition.code.text</code></td><td>Human-readable.</td></tr>
-        <tr><td><code class="inline">condition_concept.codes</code> (SNOMED / ICD-10)</td><td><code class="inline">Condition.code.coding[]</code></td><td>Multi-coded — use both SNOMED and ICD-10 codings.</td></tr>
-        <tr><td><code class="inline">condition_concept.concept_id</code></td><td>Extension <code class="inline">dsp-concept-id</code></td><td>Internal Dragon concept.</td></tr>
-        <tr><td><code class="inline">clinical_status</code></td><td><code class="inline">Condition.clinicalStatus</code> (valueset: <code class="inline">condition-clinical</code>)</td><td>DSP values (active / recurrence / relapse / inactive / remission / resolved / <strong>unknown</strong>) align with the FHIR valueset.</td></tr>
-        <tr><td><code class="inline">verification_status</code></td><td><code class="inline">Condition.verificationStatus</code></td><td>DSP values (provisional / <strong>unconfirmed</strong> / differential / confirmed / refuted / entered-in-error) align with the FHIR valueset.</td></tr>
-        <tr><td><code class="inline">category</code></td><td><code class="inline">Condition.category</code></td><td>encounter-diagnosis / problem-list-item / health-concern — direct.</td></tr>
-        <tr><td><code class="inline">severity</code></td><td><code class="inline">Condition.severity</code></td><td>Bind to SNOMED 24484000/6736007/255604002.</td></tr>
-        <tr><td><code class="inline">onset</code></td><td><code class="inline">Condition.onset[x]</code></td><td>Use <code class="inline">onsetDateTime</code> or <code class="inline">onsetString</code>.</td></tr>
-        <tr><td><code class="inline">abatement</code></td><td><code class="inline">Condition.abatement[x]</code></td><td></td></tr>
-        <tr><td><code class="inline">stage</code></td><td><code class="inline">Condition.stage</code></td><td><code class="inline">summary</code> → <code class="inline">stage.summary</code>; <code class="inline">type</code> → <code class="inline">stage.type</code>.</td></tr>
-        <tr><td><code class="inline">evidence</code></td><td><code class="inline">Condition.evidence.code.text</code></td><td></td></tr>
-        <tr><td><code class="inline">body_site</code></td><td><code class="inline">Condition.bodySite</code></td><td>Prefer SNOMED body structure codes.</td></tr>
-        <tr><td><code class="inline">notes</code></td><td><code class="inline">Condition.note.text</code></td><td></td></tr>
-        <tr><td><code class="inline">priority</code></td><td>Extension <code class="inline">dsp-resource-priority</code> (valueCode: low/medium/high)</td><td>FHIR <code class="inline">Condition</code> has no priority element; extension-only.</td></tr>
-        <tr><td><code class="inline">children_resources</code> (e.g. to plans, observations)</td><td><em>Inverse</em>: related resources reference this Condition via <code class="inline">reasonReference</code>.</td><td>Preserve the reverse link via <code class="inline">Observation.focus</code>, <code class="inline">ServiceRequest.reasonReference</code>, etc.</td></tr>
-        <tr><td><code class="inline">parent_resource</code></td><td><code class="inline">Condition.encounter</code> (if encounter) or extension</td><td></td></tr>
-        <tr><td><code class="inline">provenance</code> (turn indices)</td><td>DSP extension <code class="inline">transcript-turn-refs</code> + <code class="inline">Provenance</code> resource</td><td>See <a href="/dsp-fhir/gaps">Gaps</a>.</td></tr>
-        <tr><td><code class="inline">external_reference</code></td><td><code class="inline">identifier</code> + <code class="inline">meta.source</code> + DSP <code class="inline">linkage-confidence</code></td><td></td></tr>
+        <tr><td><code class="inline">id</code></td><td><code class="inline">Condition.id</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">description</code></td><td><code class="inline">Condition.code.text</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">condition_concept.codes</code> (SNOMED / ICD-10)</td><td><code class="inline">Condition.code.coding[]</code></td><td>Native — exact (multi-coded)</td></tr>
+        <tr><td><code class="inline">condition_concept.concept_id</code></td><td><code class="inline">Condition.code.extension[<a href="#concept-id">dsp-concept-id</a>]</code></td><td>DSP extension — exact</td></tr>
+        <tr><td><code class="inline">clinical_status</code></td><td><code class="inline">Condition.clinicalStatus</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">verification_status</code></td><td><code class="inline">Condition.verificationStatus</code> + <code class="inline">extension[<a href="#assertion">dsp-assertion-category</a>]</code></td><td>DSP nuances (asserted vs history) preserved on the extension</td></tr>
+        <tr><td><code class="inline">category</code></td><td><code class="inline">Condition.category</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">severity</code></td><td><code class="inline">Condition.severity</code></td><td>Native — bind to SNOMED 24484000/6736007/255604002</td></tr>
+        <tr><td><code class="inline">onset</code></td><td><code class="inline">Condition.onset[x]</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">abatement</code></td><td><code class="inline">Condition.abatement[x]</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">stage</code></td><td><code class="inline">Condition.stage</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">evidence</code></td><td><code class="inline">Condition.evidence.code.text</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">body_site</code></td><td><code class="inline">Condition.bodySite</code></td><td>Native; prefer SNOMED body structure codes</td></tr>
+        <tr><td><code class="inline">notes</code></td><td><code class="inline">Condition.note.text</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">confidence_score</code></td><td><code class="inline">extension[<a href="/dsp-fhir/mapping#cross-cutting">dsp-confidence-score</a>]</code></td><td>DSP extension — exact</td></tr>
+        <tr><td><code class="inline">spoken_forms</code></td><td><code class="inline">extension[<a href="/dsp-fhir/mapping#cross-cutting">dsp-spoken-forms</a>]</code> (repeating)</td><td>DSP extension — exact</td></tr>
+        <tr><td><code class="inline">provenance</code> (turn indices)</td><td><code class="inline">extension[<a href="#turn-refs">dsp-transcript-turn-ref</a>]</code> (one per index)</td><td>One extension per index, each with a versioned <code class="inline">DocumentReference</code> reference — see <a href="#turn-refs">indexing</a></td></tr>
+        <tr><td><code class="inline">parent_resource</code></td><td><code class="inline">Condition.encounter</code></td><td>Native — exact</td></tr>
+        <tr><td><code class="inline">children_resources</code></td><td><em>Inverse</em> via <code class="inline">Observation.focus</code>, <code class="inline">ServiceRequest.reasonReference</code>, etc.</td><td>Recovered by traversal at read</td></tr>
+        <tr><td><code class="inline">external_reference</code></td><td><code class="inline">identifier</code> + <code class="inline">meta.source</code> + <code class="inline">extension[dsp-linkage-confidence]</code></td><td>DSP extension — exact</td></tr>
       </tbody>
     </table>
   </div>
+  <p style="color:var(--muted); margin-top:10px">
+    Every DSP-originated field lands in either a native FHIR field or a <code class="inline">dsp-*</code> extension. The <a href="#fhir-to-dsp">canonical <code class="inline">$graphql</code> read</a> reconstructs the DSP payload directly from those slots — no inverse mapping engine required.
+  </p>
   </Fragment>
 
   <Fragment slot="example">
@@ -55,6 +59,7 @@ import { FML } from '../../data/fml';
   "description": "Moderate osteoarthritis of the right knee",
   "condition_concept": {
     "text": "Moderate osteoarthritis of the right knee",
+    "concept_id": "dragon-cid-00172",
     "codes": [
       {"system":"snomed","identifier":"239873007"},
       {"system":"icd10","identifier":"M17.11"}
@@ -65,7 +70,9 @@ import { FML } from '../../data/fml';
   "category": "encounter-diagnosis",
   "severity": "moderate",
   "body_site": "right knee",
-  "provenance": [11,15]
+  "provenance": [11, 15],
+  "confidence_score": 0.94,
+  "spoken_forms": ["arthritis in the right knee"]
 }`}</code></pre>
     </div>
     <div>
@@ -73,34 +80,188 @@ import { FML } from '../../data/fml';
 <pre><code>{`{
   "resourceType": "Condition",
   "id": "condition-001",
-  "meta": { "profile": ["https://dsp-fhir.org/StructureDefinition/Condition"] },
-  "clinicalStatus":   { "coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"}] },
-  "verificationStatus":{ "coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"confirmed"}] },
+  "meta": {
+    "profile": ["https://dsp-fhir.org/StructureDefinition/DspCondition"],
+    "source":  "https://dsp-fhir.org/source/dsp-payload-abc"
+  },
+  "subject":   {"reference":"Patient/pat-67890"},
+  "encounter": {"reference":"Encounter/enc-12345"},
+
+  "clinicalStatus":     {"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-clinical","code":"active"}]},
+  "verificationStatus": {"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-ver-status","code":"confirmed"}]},
   "category":[{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/condition-category","code":"encounter-diagnosis"}]}],
-  "severity": { "coding":[{"system":"http://snomed.info/sct","code":"6736007","display":"Moderate"}] },
+  "severity": {"coding":[{"system":"http://snomed.info/sct","code":"6736007","display":"Moderate"}]},
+
   "code": {
     "text": "Moderate osteoarthritis of the right knee",
     "coding": [
       {"system":"http://snomed.info/sct","code":"239873007"},
       {"system":"http://hl7.org/fhir/sid/icd-10-cm","code":"M17.11"}
+    ],
+    "extension": [
+      {"url":"https://dsp-fhir.org/StructureDefinition/dsp-concept-id",
+       "valueString":"dragon-cid-00172"}
     ]
   },
+
   "bodySite":[{"text":"right knee"}],
-  "subject": {"reference":"Patient/pat-67890"},
-  "encounter":{"reference":"Encounter/enc-12345"},
+
   "extension":[
-    {"url":"https://dsp-fhir.org/StructureDefinition/transcript-turn-refs",
-     "extension":[{"url":"turn","valueInteger":11},{"url":"turn","valueInteger":15}]}
+    {"url":"https://dsp-fhir.org/StructureDefinition/dsp-confidence-score",
+     "valueDecimal":0.94},
+
+    {"url":"https://dsp-fhir.org/StructureDefinition/dsp-spoken-forms",
+     "valueString":"arthritis in the right knee"},
+
+    {"url":"https://dsp-fhir.org/StructureDefinition/dsp-assertion-category",
+     "valueCode":"asserted"},
+
+    // One extension per turn index. The transcript reference is version-pinned (R1)
+    // so the integer index remains valid across re-transcription.
+    {"url":"https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref",
+     "extension":[
+       {"url":"transcript","valueReference":{"reference":"DocumentReference/dr-transcript-001/_history/3"}},
+       {"url":"turn","valueInteger":11}
+     ]},
+    {"url":"https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref",
+     "extension":[
+       {"url":"transcript","valueReference":{"reference":"DocumentReference/dr-transcript-001/_history/3"}},
+       {"url":"turn","valueInteger":15}
+     ]}
   ]
 }`}</code></pre>
     </div>
   </div>
+
+  <div class="callout" id="turn-refs" style="margin-top:18px">
+    <strong>Indexing &amp; grounding.</strong>
+    DSP's <code class="inline">provenance: [11, 15]</code> is two integer offsets into a transcript.
+    The IG models each offset as one <code class="inline">dsp-transcript-turn-ref</code> extension
+    carrying a version-pinned <code class="inline">DocumentReference</code> reference and a
+    <code class="inline">valueInteger</code>. One extension per index keeps them ordered, queryable, and
+    re-transcription-safe (per <a href="/dsp-fhir/ig#normative-rules">R1 — Turn-index stability</a>).
+    Resolving the underlying turn text is a follow-on read of the referenced
+    <code class="inline">DocumentReference</code> attachment; see
+    <a href="/dsp-fhir/operations#ground"><code class="inline">$ground</code></a>.
+  </div>
+
+  <div class="callout" id="assertion" style="margin-top:12px">
+    <strong>Lossless assertion.</strong>
+    DSP's <code class="inline">assertion</code> axis (asserted / history / denied / suspected) does not bijectively map to FHIR's
+    <code class="inline">verificationStatus</code> (asserted &cup; history &rarr; confirmed). The IG always preserves the original
+    DSP value on <code class="inline">extension[dsp-assertion-category]</code>, and the canonical read prefers that extension before
+    falling back to <code class="inline">verificationStatus</code>.
+  </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
-  <p>Executable FHIR Mapping Language skeleton for <code class="inline">DspCondition → Condition</code>. The full map ships in the <a href="/dsp-fhir/ig">downloadable IG package</a> and can be executed via <code class="inline">StructureMap/$transform</code> on a capable FHIR server.</p>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR (write projection)</h2>
+  <p>
+    On ingest the server projects the DSP condition onto a profiled <code class="inline">Condition</code> using the field landings shown above. The IG ships an executable FHIR Mapping Language skeleton as a reference implementation; partners are not required to use FML in production — a hand-written projection that satisfies the same field mapping is conformant.
+  </p>
 <pre><code>{FML.condition}</code></pre>
+  </Fragment>
+
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    The reverse direction is a <strong>read</strong>, not a transform. Standard FHIR <code class="inline">$graphql</code> selects every native field and DSP-namespaced extension that the write projection populated. A small adapter renames the result into the DSP shape. No FML inverse engine is required, and no DSP-originated field is lost — every input slot has a defined output slot.
+  </p>
+
+  <h3>Canonical query</h3>
+  <p>
+    <code class="inline">POST [fhir-base]/$graphql</code> with the condition id (or fan out from
+    <code class="inline">ConditionList(encounter:)</code> to retrieve every Condition on an encounter):
+  </p>
+<pre><code>{`query DspCondition($id: ID!) {
+  Condition(id: $id) {
+    id
+    meta { profile source versionId lastUpdated }
+
+    code {
+      text
+      coding { system code display }
+      conceptId: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-concept-id") {
+        valueString
+      }
+    }
+
+    clinicalStatus     { coding { system code } }
+    verificationStatus { coding { system code } }
+    category           { coding { system code } }
+    severity           { coding { system code display } text }
+    bodySite           { coding { system code display } text }
+    note               { text }
+
+    # Native onset/abatement choice fields
+    onsetDateTime
+    onsetString
+    abatementDateTime
+
+    # DSP-originated metadata as primitive extensions
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    spokenForms: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-spoken-forms") {
+      valueString
+    }
+    assertion: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-assertion-category") {
+      valueCode
+    }
+
+    # One repeating extension per turn index, each with its own versioned transcript ref
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+  <p>
+    The adapter is a deterministic shape-rename. It prefers <code class="inline">dsp-*</code> extensions over derived FHIR fields where the IG has guaranteed exact preservation (e.g. <code class="inline">assertion</code>):
+  </p>
+<pre><code>{`function toDspCondition(c) {
+  const turnRefs = c.turnRefs ?? [];
+  return {
+    id: c.id,
+    context: { content_type: 'condition' },
+    description: c.code?.text,
+    condition_concept: {
+      text: c.code?.text,
+      concept_id: c.code?.conceptId?.[0]?.valueString,
+      codes: (c.code?.coding ?? []).map(toDspCode),
+    },
+    clinical_status:     c.clinicalStatus?.coding?.[0]?.code,
+    verification_status: c.verificationStatus?.coding?.[0]?.code,
+    // Prefer the lossless DSP extension; fall back to verificationStatus
+    assertion: c.assertion?.[0]?.valueCode
+            ?? deriveAssertion(c.verificationStatus),
+    category:  c.category?.[0]?.coding?.[0]?.code,
+    severity:  normalizeSeverity(c.severity),
+    body_site: c.bodySite?.[0]?.text ?? c.bodySite?.[0]?.coding?.[0]?.display,
+    onset:     c.onsetDateTime ?? c.onsetString,
+    abatement: c.abatementDateTime,
+    notes:     c.note?.map(n => n.text),
+    confidence_score: c.confidence?.[0]?.valueDecimal,
+    spoken_forms:     c.spokenForms?.map(e => e.valueString) ?? [],
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> Every DSP-originated field has a declared FHIR landing — native or
+    <code class="inline">dsp-*</code> extension — and the canonical read selects each one explicitly.
+    Profile-added defaults (<code class="inline">status</code>, <code class="inline">intent</code>, hardcoded
+    categories, terminology canonicalization) are profile shape, not DSP data, and are intentionally not
+    reconstructed.
+  </div>
+
+  <p style="color:var(--muted)">
+    Servers without <code class="inline">$graphql</code> can use the documented REST fallback —
+    see <a href="/dsp-fhir/graphql#rest-fallback">$graphql fallbacks</a>. The same field landings apply.
+  </p>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="condition" />

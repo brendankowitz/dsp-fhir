@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FML } from '../src/data/fml.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -14,6 +15,30 @@ const OUT_ZIP = join(ROOT, 'public', 'dsp-fhir-ig.zip');
 const STAGE = join(ROOT, '.ig-build');
 const VERSION = '0.1.0-draft';
 const CANONICAL = 'https://dsp-fhir.org';
+const RESOURCE_PROFILES = [
+  ['DspPatient', 'Patient', 'DSP patient identity with MRN support'],
+  ['DspPractitioner', 'Practitioner', 'DSP practitioner identity with NPI support'],
+  ['DspEncounter', 'Encounter', 'Encounter/session context'],
+  ['DspComposition', 'Composition', 'Structured note with DSP document sections'],
+  ['DspDocumentReferenceTranscript', 'DocumentReference', 'Transcript JSON attachment'],
+  ['DspCondition', 'Condition', 'DSP condition/problem/diagnosis'],
+  ['DspMedicationRequest', 'MedicationRequest', 'Medication order'],
+  ['DspServiceRequestLab', 'ServiceRequest', 'Lab order'],
+  ['DspServiceRequestImaging', 'ServiceRequest', 'Imaging order'],
+  ['DspServiceRequestProcedure', 'ServiceRequest', 'Procedure order'],
+  ['DspServiceRequestReferral', 'ServiceRequest', 'Referral order'],
+  ['DspServiceRequestFollowUp', 'ServiceRequest', 'Follow-up order'],
+  ['DspNutritionOrder', 'NutritionOrder', 'Dietary order'],
+  ['DspImmunizationRecommendation', 'ImmunizationRecommendation', 'Immunization intent'],
+  ['DspImmunization', 'Immunization', 'Administered immunization'],
+  ['DspDeviceRequest', 'DeviceRequest', 'Device order'],
+  ['DspServiceRequestTherapy', 'ServiceRequest', 'Therapy order'],
+  ['DspCarePlan', 'CarePlan', 'Activity aggregator'],
+  ['DspServiceRequestStudy', 'ServiceRequest', 'Diagnostic study order'],
+  ['DspResearchSubject', 'ResearchSubject', 'Research enrollment'],
+  ['DspProvenance', 'Provenance', 'Per-ingest provenance'],
+  ['DspMediaRecording', 'Media', 'Audio/video recording'],
+];
 
 function w(relPath, content) {
   const full = join(STAGE, relPath);
@@ -21,6 +46,12 @@ function w(relPath, content) {
   writeFileSync(full, typeof content === 'string' ? content : JSON.stringify(content, null, 2));
 }
 function j(relPath, obj) { w(relPath, obj); }
+function mapName(fml, fallback) {
+  return fml.match(/\bmap\s+"[^"]+"\s*=\s*"([^"]+)"/)?.[1] ?? fallback;
+}
+function mapFileName(fml, fallback) {
+  return `${mapName(fml, fallback).replace(/[^A-Za-z0-9_.-]/g, '-')}.map`;
+}
 
 if (existsSync(STAGE)) rmSync(STAGE, { recursive: true, force: true });
 mkdirSync(STAGE, { recursive: true });
@@ -65,10 +96,11 @@ java -jar publisher.jar -ig ig.ini
 
 ## Executable mapping (optional)
 
-FML sources in \`input/maps/\` are skeletons that demonstrate the DSP→FHIR
-transformation pattern against the DSP logical models. Compile with sushi or
-the HL7 FHIR Mapping Language compiler, then execute via \`$transform\` on a
-matchbox / HAPI server. See \`input/pagecontent/fml-strategy.md\`.
+FML sources in \`input/maps/dsp-to-fhir/\` and \`input/maps/fhir-to-dsp/\` are
+skeletons that demonstrate both transform directions against the DSP logical
+models and profiled FHIR resources. Compile with sushi or the HL7 FHIR Mapping
+Language compiler, then execute via \`$transform\` on a matchbox / HAPI server.
+See \`input/pagecontent/fml-strategy.md\`.
 
 ## The normative four
 
@@ -121,7 +153,7 @@ pages:
   index.md: { title: Home }
   background.md: { title: Background — DSP 1.0 }
   design-decisions.md: { title: Design decisions (R4 vs R5 vs R6) }
-  mappings.md: { title: DSP → FHIR mappings }
+  mappings.md: { title: DSP ↔ FHIR mappings }
   graphql.md: { title: Canonical $graphql query }
   fml-strategy.md: { title: FML / StructureMap strategy }
   operations.md: { title: Operations audit }
@@ -192,15 +224,15 @@ Description: "0..1 model confidence for a resource or element derived from a Dra
 * valueDecimal ^minValueDecimal = 0.0
 * valueDecimal ^maxValueDecimal = 1.0
 
-Extension: DspTranscriptTurnRefs
-Id: dsp-transcript-turn-refs
-Title: "Transcript turn references"
-Description: "Turn indices within a DocumentReference transcript that justify this resource/element. Immutable within a transcript versionId (R1)."
+Extension: DspTranscriptTurnRef
+Id: dsp-transcript-turn-ref
+Title: "Transcript turn reference"
+Description: "One transcript turn index that justifies the parent resource/element. Carries its own version-pinned DocumentReference reference so the integer index remains valid across re-transcription (R1). Repeats once per index."
 * ^context.type = #element
 * ^context.expression = "Element"
-* extension contains turn 1..* and transcript 0..1
-* extension[turn].value[x] only integer
+* extension contains transcript 1..1 and turn 1..1
 * extension[transcript].value[x] only Reference(DocumentReference)
+* extension[turn].value[x] only integer
 
 Extension: DspSpokenForms
 Id: dsp-spoken-forms
@@ -662,7 +694,7 @@ Title: "DSP Condition"
 * extension contains
     DspAssertionCategory named assertion 0..1 and
     DspConfidenceScore named confidence 0..1 and
-    DspTranscriptTurnRefs named turnRefs 0..1 and
+    DspTranscriptTurnRef named turnRefs 0..* and
     DspSpokenForms named spokenForms 0..* and
     DspResourceSource named source 0..1
 * code.extension contains DspConceptId named conceptId 0..1
@@ -675,7 +707,7 @@ Title: "DSP MedicationRequest"
 * extension contains
     DspRenderedDosageInstruction named rendered 0..1 and
     DspConfidenceScore named confidence 0..1 and
-    DspTranscriptTurnRefs named turnRefs 0..1
+    DspTranscriptTurnRef named turnRefs 0..*
 
 Profile: DspServiceRequestLab
 Parent: USCoreServiceRequestProfile
@@ -770,136 +802,63 @@ Title: "DSP Media (audio/video)"
 * content.url 1..1
 `);
 
+const profileRows = RESOURCE_PROFILES
+  .map(([profile, base, notes]) => `| \`${profile}\` | \`${base}\` | ${notes} |`)
+  .join('\n');
+
+w('input/profiles/README.md', `# DSP-FHIR resource profiles
+
+All resource profile source definitions are available in
+\`input/fsh/profiles.fsh\`. SUSHI expands these FSH definitions into FHIR
+\`StructureDefinition\` resources when the IG is built.
+
+| Profile | Base resource | Notes |
+|---|---|---|
+${profileRows}
+`);
+
 // ---------- FML maps ----------
-w('input/maps/DspConditionToCondition.map', `// FHIR Mapping Language — DSP condition → FHIR Condition (US Core profile)
-// Compile: sushi or fhir-mapping-language compiler
-// Execute: POST [fhir-base]/StructureMap/$transform?source=<canonical>
-//          with a DspConditionResource instance in the body.
+const forwardMaps = Object.entries(FML);
 
-map "${CANONICAL}/StructureMap/DspConditionToCondition" = "DspConditionToCondition"
+for (const [slug, source] of forwardMaps) {
+  w(`input/maps/dsp-to-fhir/${mapFileName(source, slug)}`, `// FHIR Mapping Language — DSP → FHIR (${slug})
+// Compile: sushi or the FHIR Mapping Language compiler.
+// Execute: POST [fhir-base]/StructureMap/$transform?source=${CANONICAL}/StructureMap/${mapName(source, slug)}
 
-uses "${CANONICAL}/StructureDefinition/DspConditionResource" alias DspCondition as source
-uses "http://hl7.org/fhir/StructureDefinition/Condition" alias Condition as target
-
-group DspConditionToCondition(source src : DspCondition, target tgt : Condition) {
-  src.id as id -> tgt.id = id;
-
-  // Code: prefer normalized system+code, else text only
-  src.payload as p then {
-    p.code as c -> tgt.code as code, code.coding as coding then {
-      c -> coding.code = c;
-      p.code_system as sys -> coding.system = sys;
-      p.display as d -> coding.display = d;
-    } "code";
-    p.display as d -> tgt.code as code, code.text = d "display-fallback";
-
-    // Assertion category → clinicalStatus + verificationStatus + extension
-    p.assertion as a -> tgt.extension as ext then {
-      a -> ext.url = '${CANONICAL}/StructureDefinition/dsp-assertion-category',
-           ext.value = create('code') as v, v.value = a;
-    } "assertion-ext";
-
-    p.assertion as a where (a = 'asserted' or a = 'history') -> tgt.verificationStatus as vs,
-      vs.coding as co, co.system = 'http://terminology.hl7.org/CodeSystem/condition-ver-status',
-      co.code = 'confirmed' "verif-confirmed";
-    p.assertion as a where a = 'denied' -> tgt.verificationStatus as vs,
-      vs.coding as co, co.system = 'http://terminology.hl7.org/CodeSystem/condition-ver-status',
-      co.code = 'refuted' "verif-refuted";
-    p.assertion as a where a = 'suspected' -> tgt.verificationStatus as vs,
-      vs.coding as co, co.system = 'http://terminology.hl7.org/CodeSystem/condition-ver-status',
-      co.code = 'provisional' "verif-provisional";
-
-    p.concept_id as cid -> tgt.code as code, code.extension as ext then {
-      cid -> ext.url = '${CANONICAL}/StructureDefinition/dsp-concept-id',
-             ext.value = create('string') as v, v.value = cid;
-    } "concept-id";
-  };
-
-  // Confidence → extension
-  src.confidence as conf -> tgt.extension as ext then {
-    conf -> ext.url = '${CANONICAL}/StructureDefinition/dsp-confidence-score',
-            ext.value = create('decimal') as v, v.value = conf;
-  } "confidence";
-
-  // Transcript turn refs → extension (turn instances)
-  src.transcript_turn_refs as t -> tgt.extension as ext,
-    ext.url = '${CANONICAL}/StructureDefinition/dsp-transcript-turn-refs',
-    ext.extension as turnExt,
-    turnExt.url = 'turn',
-    turnExt.value = create('integer') as v, v.value = t "turn-ref";
-
-  // Spoken forms → repeating extension
-  src.spoken_forms as sf -> tgt.extension as ext,
-    ext.url = '${CANONICAL}/StructureDefinition/dsp-spoken-forms',
-    ext.value = create('string') as v, v.value = sf "spoken-form";
-
-  // Default clinicalStatus = active (caller can override post-hoc)
-  src -> tgt.clinicalStatus as cs, cs.coding as co,
-    co.system = 'http://terminology.hl7.org/CodeSystem/condition-clinical',
-    co.code = 'active' "clinical-default";
-}
+${source}
 `);
-
-w('input/maps/DspMedicationOrderToMedicationRequest.map', `// FML — DSP order.medication → FHIR MedicationRequest (US Core profile)
-
-map "${CANONICAL}/StructureMap/DspMedicationOrderToMedicationRequest" = "DspMedicationOrderToMedicationRequest"
-
-uses "${CANONICAL}/StructureDefinition/DspOrderMedicationResource" alias DspMedOrder as source
-uses "http://hl7.org/fhir/StructureDefinition/MedicationRequest" alias MedicationRequest as target
-
-group DspMedicationOrderToMedicationRequest(source src : DspMedOrder, target tgt : MedicationRequest) {
-  src.id as id -> tgt.id = id;
-  src -> tgt.status = 'active';
-  src -> tgt.intent = 'order';
-
-  src.payload as p then {
-    p.drug as drug -> tgt.medication = create('CodeableConcept') as cc,
-      cc.text = drug "drug-text";
-    p.rxnorm_code as rx -> tgt.medication as med, med.coding as co,
-      co.system = 'http://www.nlm.nih.gov/research/umls/rxnorm', co.code = rx "rxnorm";
-    p.rendered_dosage_instruction as rdi -> tgt.extension as ext then {
-      rdi -> ext.url = '${CANONICAL}/StructureDefinition/dsp-rendered-dosage-instruction',
-             ext.value = create('string') as v, v.value = rdi;
-    } "rendered-sig";
-    p.rendered_dosage_instruction as rdi -> tgt.dosageInstruction as di, di.text = rdi "sig-text";
-  };
-
-  src.confidence as conf -> tgt.extension as ext then {
-    conf -> ext.url = '${CANONICAL}/StructureDefinition/dsp-confidence-score',
-            ext.value = create('decimal') as v, v.value = conf;
-  } "confidence";
-
-  src.transcript_turn_refs as t -> tgt.extension as ext,
-    ext.url = '${CANONICAL}/StructureDefinition/dsp-transcript-turn-refs',
-    ext.extension as turnExt, turnExt.url = 'turn',
-    turnExt.value = create('integer') as v, v.value = t "turn-ref";
 }
-`);
+
+const mapRows = forwardMaps
+  .map(([slug, source]) => `| \`dsp-to-fhir/${mapFileName(source, slug)}\` | DSP → FHIR | \`${slug}\` |`)
+  .join('\n');
 
 w('input/maps/README.md', `# FML / StructureMap sources
 
-These are **skeleton** FHIR Mapping Language files demonstrating the DSP →
-FHIR transformation approach. They are not complete coverage of all 15 DSP
-resource types — see \`../pagecontent/fml-strategy.md\` for the phasing.
+These are reference FHIR Mapping Language skeletons for the **DSP → FHIR write
+projection**. The same source strings power the companion website's mapping
+tabs, so the downloadable IG package and site stay in lockstep.
+
+The reverse direction (**FHIR → DSP**) is published as a canonical FHIR
+\`$graphql\` query plus a deterministic reconstruction adapter on each
+[mapping page](https://brendankowitz.github.io/dsp-fhir/mapping). FML inverse
+maps are not shipped because GraphQL + the IG's \`dsp-*\` extension landings
+already provide a no-data-loss read path.
 
 ## Files
 
-| File | Direction | Coverage | Notes |
-|---|---|---|---|
-| \`DspConditionToCondition.map\` | DSP → FHIR | Complete | Demonstrates assertion-category routing to \`verificationStatus\`, turn-ref / confidence / spoken-forms extension generation. |
-| \`DspMedicationOrderToMedicationRequest.map\` | DSP → FHIR | Complete | RxNorm-code resolution, rendered-dosage-instruction carrying via R5 xver extension + literal \`dosageInstruction.text\`. |
+| File | Direction | DSP area |
+|---|---|---|
+${mapRows}
 
-## What's intentionally **not** here yet
+## Notes
 
-- **Routing-split mappings** (immunization → Immunization vs
-  ImmunizationRecommendation; study → ServiceRequest vs ResearchSubject;
-  activity → CarePlan.activity vs standalone ServiceRequest). FML can express
-  these with \`where\` clauses on input fields but the condition logic is
-  awkward enough that Phase-3 implementations are expected to split upstream
-  before invoking the map.
-- **Reverse FHIR → DSP maps.** Phase 4.
-- **Grounding state (R1).** Cross-version turn-index management is controller
-  logic, not mapping. StructureMap is deliberately pure.
+- **Routing-split mappings** (immunization, study, activity) include the primary
+  branch plus comments for alternate branches. Producers should split upstream
+  before invoking a map when source data can route to multiple FHIR resource
+  types.
+- **Grounding state (R1)** is controller logic, not mapping. StructureMap is
+  deliberately pure.
 
 ## Running against a DSP payload
 
@@ -1070,11 +1029,15 @@ j('input/examples/Bundle-example-visit.json', {
         extension: [
           { url: `${CANONICAL}/StructureDefinition/dsp-assertion-category`, valueCode: 'asserted' },
           { url: `${CANONICAL}/StructureDefinition/dsp-confidence-score`, valueDecimal: 0.94 },
-          { url: `${CANONICAL}/StructureDefinition/dsp-transcript-turn-refs`,
+          { url: `${CANONICAL}/StructureDefinition/dsp-transcript-turn-ref`,
             extension: [
-              { url: 'turn', valueInteger: 7 },
-              { url: 'turn', valueInteger: 9 },
-              { url: 'transcript', valueReference: { reference: 'urn:uuid:transcript-1' } }
+              { url: 'transcript', valueReference: { reference: 'urn:uuid:transcript-1' } },
+              { url: 'turn',       valueInteger: 7 }
+            ] },
+          { url: `${CANONICAL}/StructureDefinition/dsp-transcript-turn-ref`,
+            extension: [
+              { url: 'transcript', valueReference: { reference: 'urn:uuid:transcript-1' } },
+              { url: 'turn',       valueInteger: 9 }
             ] }
         ]
       },
@@ -1148,8 +1111,9 @@ query DspEncounter($id: ID!) {
       code { coding { system code display } text }
       clinicalStatus { coding { code } }
       extension(url: "${CANONICAL}/StructureDefinition/dsp-confidence-score") { valueDecimal }
-      extension(url: "${CANONICAL}/StructureDefinition/dsp-transcript-turn-refs") {
-        extension { url valueInteger valueReference { reference } }
+      extension(url: "${CANONICAL}/StructureDefinition/dsp-transcript-turn-ref") {
+        transcript: extension(url: "transcript") { valueReference { reference } }
+        turn:       extension(url: "turn")       { valueInteger }
       }
     }
     MedicationRequest: _revinclude(type: "MedicationRequest", field: "encounter") {
@@ -1178,8 +1142,8 @@ w('input/pagecontent/index.md', `# DSP-FHIR IG (draft ${VERSION})
 - **Extensions** for DSP semantics with no natural FHIR home (turn refs,
   confidence, payload-version, assertion category, spoken forms, imaging/follow-up/etc.).
 - **Value sets / code systems** for DSP enumerations.
-- **FML / StructureMap** skeletons: executable DSP→FHIR mappings for Condition
-  and MedicationRequest as worked examples; see \`fml-strategy.html\` for phasing.
+- **FML / StructureMap** skeletons: executable DSP → FHIR mappings and FHIR → DSP
+  reconstruction maps for every resource mapping; see \`fml-strategy.html\`.
 - **CapabilityStatement** declaring the four conformance levels.
 - **One custom OperationDefinition:** \`$ground\` (turn-join).
 - **Four normative rules** (R1–R4).
@@ -1235,7 +1199,8 @@ for all partners. See \`graphql.html\` and \`operations.html\`.
 ## FML + logical models
 
 DSP gets a FHIR logical model (\`DspPayload\` / \`DspResource\` / per-type
-submodels). FML maps DSP resources to FHIR profiles. Partners can execute via
+submodels). FML maps DSP resources to FHIR profiles and provides reverse
+FHIR → DSP reconstruction skeletons. Partners can execute via
 \`StructureMap/$transform\` instead of writing bespoke converters. See \`fml-strategy.html\`.
 
 ## One custom operation, not ten
@@ -1256,7 +1221,7 @@ DSP collapses FHIR distinctions; the IG picks routing rules:
   \`ServiceRequest(category=activity)\` when per-activity provenance matters.
 `);
 
-w('input/pagecontent/mappings.md', `# DSP → FHIR mappings
+w('input/pagecontent/mappings.md', `# DSP ↔ FHIR mappings
 
 Full side-by-side mappings: <https://brendankowitz.github.io/dsp-fhir/mapping>.
 
@@ -1327,15 +1292,17 @@ class of problem (non-FHIR source → FHIR).
 | Phase | Scope | Status in this draft |
 |---|---|---|
 | **1** | DSP logical models (envelope + per content_type) | ✓ included |
-| **2** | FML for deterministic 1:1 maps (condition, document_section, medication/lab/imaging/procedure orders) | 2/6 skeletons included (condition, medication) |
-| **3** | FML for routing-split maps (immunization, study, activity) with documented pre-split contract | planned |
-| **4** | Reverse FHIR→DSP maps (round-trip proof) | planned |
+| **2** | FML for deterministic and routing-split DSP → FHIR maps | ✓ included for all resource mappings |
+| **3** | FML for FHIR → DSP reconstruction maps | ✓ included for all resource mappings |
+| **4** | Stateful grounding / provenance orchestration | controller logic, not FML |
 
 ## What ships in this draft
 
-- \`input/fsh/logical-models.fsh\` — DSP envelope, context, transcript, recording, resource and four per-type logical models.
-- \`input/maps/DspConditionToCondition.map\` — FML for DSP condition → FHIR Condition (full coverage of the DSP condition payload).
-- \`input/maps/DspMedicationOrderToMedicationRequest.map\` — FML for DSP medication order → MedicationRequest (RxNorm resolution + rendered dosage instruction via R5 xver).
+- \`input/fsh/logical-models.fsh\` — DSP envelope, context, transcript, recording, resource and per-type logical models.
+- \`input/fsh/profiles.fsh\` — all DSP-FHIR resource profiles.
+- \`input/profiles/README.md\` — human-readable profile catalog.
+- \`input/maps/dsp-to-fhir/\` — all forward DSP → FHIR FML skeletons.
+- \`input/maps/fhir-to-dsp/\` — all reverse FHIR → DSP reconstruction skeletons.
 - \`input/maps/README.md\` — execution notes for matchbox / HAPI.
 
 ## Executing
@@ -1364,7 +1331,7 @@ w('input/pagecontent/operations.md', `# Operations audit (summary)
 | Terminology expand/lookup | \`$expand\`, \`$lookup\` | Core FHIR |
 | Apply order-set plan | \`PlanDefinition/$apply\` | CPG |
 | Patient matching | \`Patient/$match\` | Core FHIR |
-| **DSP → FHIR transform** | **\`StructureMap/$transform\`** + published maps | **Core FHIR + this IG** |
+| **DSP ↔ FHIR transform** | **\`StructureMap/$transform\`** + published maps | **Core FHIR + this IG** |
 | **Turn-join grounding** | **\`$ground\`** (custom) | **DSP-FHIR** |
 `);
 
@@ -1398,7 +1365,7 @@ w('input/pagecontent/changelog.md', `# Changelog
 - CapabilityStatement (DSP-Core level).
 - OperationDefinition: \`$ground\`.
 - DSP logical models (envelope + per content_type).
-- FML skeletons: condition, medication order.
+- FML skeletons for all resource mappings in both directions.
 - Normative rules R1–R4.
 - Worked example Bundle + illustrative DSP condition input.
 `);

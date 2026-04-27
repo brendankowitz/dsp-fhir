@@ -121,10 +121,106 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Routing-split map — the FML below covers the "administered" branch. The recommendation branch is sketched as a comment; see the downloadable IG package for the pre-split convention.</p>
 <pre><code>{FML.immunization}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    DSP <code class="inline">IMMUNIZATION_ORDER</code> routes to two FHIR resource types. The reader runs the matching query for the resource type it has and dispatches to the right adapter.
+  </p>
+  <h3>Canonical query (administered branch — <code class="inline">Immunization</code>)</h3>
+<pre><code>{`query DspImmunization($id: ID!) {
+  Immunization(id: $id) {
+    id status
+    vaccineCode { coding { system code display } text }
+    occurrenceDateTime
+    lotNumber
+    site { coding { system code display } text }
+    route { coding { system code display } text }
+    protocolApplied {
+      doseNumberPositiveInt
+      doseNumberString
+      series
+    }
+    reasonCode { text }
+
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>Canonical query (proposal branch — <code class="inline">ImmunizationRecommendation</code>)</h3>
+<pre><code>{`query DspImmunizationProposal($id: ID!) {
+  ImmunizationRecommendation(id: $id) {
+    id date
+    recommendation {
+      vaccineCode { coding { system code display } }
+      forecastStatus { coding { system code display } }
+      doseNumberPositiveInt
+      dateCriterion {
+        code { coding { system code display } }
+        value
+      }
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspImmunizationOrder(r) {
+  // Discriminate on resourceType (returned in __typename or known by query)
+  if (r.__typename === 'Immunization' || r.occurrenceDateTime) {
+    const turnRefs = r.turnRefs ?? [];
+    return {
+      type: 'IMMUNIZATION_ORDER',
+      id: r.id,
+      intent: 'order',
+      order_data: {
+        vaccine_code:        r.vaccineCode?.coding?.[0]?.code,
+        vaccine_code_system: 'CVX',
+        administered_at:     r.occurrenceDateTime,
+        lot_number:          r.lotNumber,
+        site:                r.site?.coding?.[0]?.code ?? r.site?.text,
+        route:               r.route?.coding?.[0]?.code ?? r.route?.text,
+        dose_number:         r.protocolApplied?.[0]?.doseNumberPositiveInt,
+        series:              r.protocolApplied?.[0]?.series,
+      },
+      reason: r.reasonCode?.[0]?.text,
+      confidence_score: r.confidence?.[0]?.valueDecimal,
+      provenance:       turnRefs.map(t => t.turn?.valueInteger),
+      transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+    };
+  }
+  // Recommendation branch
+  const rec = r.recommendation?.[0];
+  return {
+    type: 'IMMUNIZATION_ORDER',
+    id: r.id,
+    intent: 'proposal',
+    order_data: {
+      vaccine_code:        rec?.vaccineCode?.[0]?.coding?.[0]?.code,
+      vaccine_code_system: 'CVX',
+      dose_number:         rec?.doseNumberPositiveInt,
+      recommended_date:    rec?.dateCriterion?.find(d => d.code?.coding?.[0]?.code === 'recommended')?.value,
+    },
+    confidence_score: r.confidence?.[0]?.valueDecimal,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> The routing split is recovered from the FHIR resource type;
+    each branch's fields land natively.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="immunization" />

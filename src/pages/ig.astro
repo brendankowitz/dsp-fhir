@@ -6,7 +6,7 @@ import Layout from '../layouts/Layout.astro';
   <p class="lead">
     The IG packages the mapping decisions into a shippable, validatable artifact: profiles that
     constrain R4 resources for DSP, extensions for the gaps, value sets for the enumerated DSP
-    fields, <strong>DSP logical models + FML maps</strong> for executable transformation, and a
+      fields, <strong>DSP logical models + directional FML maps</strong> for executable transformation, and a
     canonical <code class="inline">$graphql</code> query that is the DSP read contract.
   </p>
 
@@ -14,7 +14,7 @@ import Layout from '../layouts/Layout.astro';
     <h2 style="margin-top:0">Download the draft IG package</h2>
     <p>
       Full source tree — sushi-config, FSH (profiles, extensions, logical models, value sets),
-      FML mapping skeletons, CapabilityStatement, OperationDefinition, narrative pages, and a
+      all DSP ↔ FHIR FML mapping skeletons, CapabilityStatement, OperationDefinition, narrative pages, and a
       worked example Bundle. Ready to run through <a href="https://fshschool.org/docs/sushi/">sushi</a>
       + the <a href="https://github.com/HL7/fhir-ig-publisher">HL7 IG Publisher</a>.
     </p>
@@ -100,21 +100,18 @@ import Layout from '../layouts/Layout.astro';
       maps a typed source.
     </p>
     <p>
-      The draft ships executable <strong>FHIR Mapping Language</strong> skeletons:
-      <code class="inline">DspConditionToCondition.map</code> (full coverage of the DSP
-      condition payload — assertion-category routing, turn-ref / confidence / spoken-forms
-      extension generation) and
-      <code class="inline">DspMedicationOrderToMedicationRequest.map</code> (RxNorm code
-      resolution + rendered dosage instruction via the R5 xver extension). Partners compile
-      with sushi or the FML compiler and execute via
+      The draft ships executable <strong>FHIR Mapping Language</strong> skeletons for every
+      resource mapping in both directions. Forward maps live under
+      <code class="inline">input/maps/dsp-to-fhir/</code>; reverse reconstruction maps live under
+      <code class="inline">input/maps/fhir-to-dsp/</code>. Partners compile with sushi or the FML compiler and execute via
       <code class="inline">StructureMap/$transform</code> on matchbox / HAPI — no bespoke
       per-partner converter needed.
     </p>
     <p>
-      Phasing (documented in <code class="inline">fml-strategy.md</code>): P1 logical models ✓,
-      P2 deterministic 1:1 maps (2 of 6 shipped), P3 routing-split maps (immunization / study
-      / activity) — producer pre-split expected, P4 reverse FHIR→DSP maps. Grounding state
-      (R1) is explicitly <em>not</em> in FML — it's controller logic.
+      The IG download also includes all resource profile definitions in
+      <code class="inline">input/fsh/profiles.fsh</code> plus a profile catalog at
+      <code class="inline">input/profiles/README.md</code>. Grounding state
+      (R1) remains controller logic rather than FML.
     </p>
   </div>
 

@@ -78,10 +78,71 @@ import { FML } from '../../data/fml';
   </div>
   </Fragment>
 
-  <Fragment slot="fml">
-  <h2>FML mapping</h2>
+  <Fragment slot="dspToFhir">
+  <h2>DSP → FHIR mapping</h2>
   <p>Skeleton for <code class="inline">DspFollowUpOrder → ServiceRequest(category=follow-up)</code> with the <code class="inline">return-in</code> <code class="inline">Duration</code> + approximation-flag pattern.</p>
 <pre><code>{FML['follow-up']}</code></pre>
+  </Fragment>
+  <Fragment slot="fhirToDsp">
+  <h2 id="fhir-to-dsp">FHIR → DSP (canonical <code class="inline">$graphql</code> read)</h2>
+  <p>
+    The <code class="inline">return-in</code> Duration is preserved on a dedicated extension carrying value, unit, and the approximation flag, so the DSP fields recover exactly.
+  </p>
+  <h3>Canonical query</h3>
+<pre><code>{`query DspFollowUpOrder($id: ID!) {
+  ServiceRequest(id: $id) {
+    id status intent
+    code { text }
+    reasonCode { text }
+    reasonReference { reference }
+
+    returnIn: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-return-in") {
+      valueDuration {
+        value unit code
+        approximation: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-approximation") {
+          valueBoolean
+        }
+      }
+    }
+    prn: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-prn") {
+      valueBoolean
+    }
+    confidence: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-confidence-score") {
+      valueDecimal
+    }
+    turnRefs: extension(url: "https://dsp-fhir.org/StructureDefinition/dsp-transcript-turn-ref") {
+      transcript: extension(url: "transcript") { valueReference { reference } }
+      turn:       extension(url: "turn")       { valueInteger }
+    }
+  }
+}`}</code></pre>
+
+  <h3>DSP reconstruction adapter</h3>
+<pre><code>{`function toDspFollowUpOrder(s) {
+  const dur = s.returnIn?.[0]?.valueDuration;
+  const turnRefs = s.turnRefs ?? [];
+  return {
+    id: s.id,
+    type: 'FOLLOW_UP_ORDER',
+    intent: s.intent,
+    description: s.code?.text,
+    reason: s.reasonCode?.[0]?.text,
+    reason_references: s.reasonReference?.map(r => r.reference),
+    order_data: {
+      return_in_value: dur?.value,
+      return_in_unit:  dur?.code ?? dur?.unit,
+      approximation:   dur?.approximation?.[0]?.valueBoolean,
+      prn:             s.prn?.[0]?.valueBoolean,
+    },
+    confidence_score: s.confidence?.[0]?.valueDecimal,
+    provenance:       turnRefs.map(t => t.turn?.valueInteger),
+    transcript_ref:   turnRefs[0]?.transcript?.valueReference?.reference,
+  };
+}`}</code></pre>
+
+  <div class="callout ok">
+    <strong>No data loss.</strong> The Duration carries value/unit/approximation in one structured slot.
+  </div>
   </Fragment>
   <Fragment slot="sqlOnFhir">
     <SqlOnFhirViews slug="follow-up" />
